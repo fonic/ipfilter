@@ -370,7 +370,7 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )); then
 		print_normal "Generating GeoLite2 blocklist '${country}'..."
 		printf -v dst "${tmpdir}/${GL2_FOUT1}" "${country,,}"
 		> "${dst}"
-		for ipv in "${GL2_IPVS[@]}"; do
+		for ipv in "${GL2_IPVERS[@]}"; do
 			printf -v src "${tmpdir}/${GL2_FIN3}" "${ipv,,}"
 			[[ "${ipv}" == "IPv4" ]] && sort_opts="--version-sort" || sort_opts=""
 			grep --no-filename "${country_ids["${country,,}"]}" "${src}" | awk --field-separator ',' '{ print $1 }' | \
