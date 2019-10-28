@@ -5,20 +5,9 @@
 #  IP Filter Updater & Generator                                          -
 #                                                                         -
 #  Created by Fonic (https://github.com/fonic/ipfilter)                   -
-#  Date: 10/26/19                                                         -
+#  Date: 10/28/19                                                         -
 #                                                                         -
 # -------------------------------------------------------------------------
-
-
-# --------------------------------------
-#                                      -
-#  TODO                                -
-#                                      -
-# --------------------------------------
-#
-# - it seems IPv6 is not supported by the .p2p format -> IPv6 deactivated for now
-#
-
 
 # --------------------------------------
 #                                      -
@@ -27,9 +16,11 @@
 # --------------------------------------
 
 # Program
-PROG_NAME="IP Filter Updater & Generator"
-PROG_EXEC="$(basename "${BASH_SOURCE[0]}")"
+PROG_TITLE="IP Filter Updater & Generator"
 PROG_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROG_EXEC="$(basename "${BASH_SOURCE[0]}")"
+PROG_NAME="${PROG_EXEC%.*}"
+PROG_CONFIG="${PROG_BASE}/${PROG_NAME}.conf"
 
 # Wget options
 WGET_OPTS=("--quiet" "--tries=3" "--timeout=15")
@@ -39,7 +30,6 @@ IBL_URL="http://list.iblocklist.com/?list=%s&fileformat=p2p&archiveformat=gz"
 IBL_FIN1="iblocklist-%s.p2p.gz"
 IBL_FIN2="iblocklist-%s.p2p"
 IBL_FOUT="iblocklist-merged.p2p"
-#declare -A IBL_LISTS=(["level1"]="ydxerpxkpcfqjaybcssw" ["level2"]="gyisgnzbhppbvsphucsw" ["level3"]="uwnukjqktoggdknzrhgh" ["badpeers"]="cwworuawihqvocglcoss")
 declare -A IBL_LISTS=(["level1"]="ydxerpxkpcfqjaybcssw" ["level2"]="gyisgnzbhppbvsphucsw" ["level3"]="uwnukjqktoggdknzrhgh")
 
 # GeoLite2 (https://dev.maxmind.com/geoip/geoip2/geolite2)
@@ -49,11 +39,12 @@ GL2_FIN2="geolite2-country-locations-en.csv"
 GL2_FIN3="geolite2-country-blocks-%s.csv"
 GL2_FOUT1="geolite2-%s.p2p"
 GL2_FOUT2="geolite2-merged.p2p"
-GL2_COUNTRIES=("China")
+GL2_COUNTRIES=()
+GL2_IPVS=("IPv4")
 
 # Final output file, install destination
 FINAL_FILE="ipfilter.p2p"
-INSTALL_TO="${PROG_BASE}/${FINAL_FILE}"
+INSTALL_TO="${PROG_BASE}/${PROG_NAME}.p2p"
 
 
 # --------------------------------------
@@ -98,7 +89,7 @@ function print_error() {
 # in subshell)
 function error_trap() {
 	print_error "An error occured, aborting." >&2
-	(( ${notify} == 1 )) && notify-send --urgency=critical --app-name="${PROG_NAME}" "An error occurred while updating." "Please check output for errors."
+	(( ${notify} == 1 )) && notify-send --urgency=critical --app-name="${PROG_TITLE}" "An error occurred while updating." "Please check output for errors."
 	kill -s TERM $$
 	exit 1
 }
@@ -145,7 +136,6 @@ function split_string() {
 }
 
 # Convert CIDR to IP address range (IPv4) [$1: CIDR string, $2: target variable start IP string, $3: target variable end IP string]
-# (NOTE: copied from 'Playground/bash_cidr_to_ip_range_ipv4_ipv6.sh'; reduced to what we need here)
 function cidr_to_range_ipv4() {
 	local _cidr="$1"
 	local -n _sips="$2"
@@ -170,7 +160,6 @@ function cidr_to_range_ipv4() {
 }
 
 # Convert CIDR to IP address range (IPv6) [$1: CIDR string, $2: target variable start IP string, $3: target variable end IP string]
-# (NOTE: copied from 'Playground/bash_cidr_to_ip_range_ipv4_ipv6.sh'; reduced to what we need here; using padded hex for _sips/_eips to facilitate sort)
 function cidr_to_range_ipv6() {
 	local _cidr="$1"
 	local -n _sips="$2"; _sips=""
@@ -222,10 +211,13 @@ trap "exit 1" TERM; trap "error_trap" ERR
 trap "trap - ERR; echo -en \"\r\e[2K\"" INT
 trap "print_normal" EXIT
 
+# Source configuration file if present and readable
+[[ -r "${PROG_CONFIG}" ]] && source "${PROG_CONFIG}"
+
 # Set window title, print title
-set_window_title "${PROG_NAME}"
+set_window_title "${PROG_TITLE}"
 print_normal
-print_light "--== ${PROG_NAME} ==--"
+print_light "--== ${PROG_TITLE} ==--"
 print_normal
 
 # Provide help if requested (NOTE: we do this separately so that help shows
@@ -262,7 +254,7 @@ fi
 # Create temporary folder, set cleanup trap (NOTE: replaces EXIT trap set
 # above for cosmetic reasons)
 print_light "Creating temporary folder..."
-tmpdir="$(mktemp --directory --tmpdir=/tmp "${PROG_EXEC%.*}.XXXXXXXXXX")"
+tmpdir="$(mktemp --directory --tmpdir=/tmp "${PROG_NAME}.XXXXXXXXXX")"
 (( ${keep_temp} == 0 )) && trap "print_light \"Removing temporary folder...\"; rm -rf \"${tmpdir}\"; print_normal" EXIT
 
 
@@ -292,12 +284,14 @@ if (( ${#IBL_LISTS[@]} > 0 )); then
 		gunzip < "${src}" > "${dst}"
 	done
 
-	# Merge blocklists
+	# Merge blocklists (NOTE: we have to sort in order to be able to uniq;
+	# version sort works well for IPv4, but not for IPv6; sed removes empty
+	# lines and comment lines)
 	print_light "Merging I-BlockList blocklists..."
 	readarray -t src < <(printf "${tmpdir}/${IBL_FIN2}\n" "${!IBL_LISTS[@]}")
 	dst="${tmpdir}/${IBL_FOUT}"
-	cat "${src[@]}" | sort --version-sort | uniq > "${dst}"                                     # Version sort works well for IPv4, but not for IPv6 (requires alphanumerical sort); We *have* to sort in order to uniq, so we use version sort as IPv4 is dominant anyway
-	sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"                        # Remove empty lines and comment lines (there should only be two in total due to sort + uniq)
+	cat "${src[@]}" | sort --version-sort | uniq > "${dst}"
+	sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"
 
 else
 	touch "${tmpdir}/${IBL_FOUT}"
@@ -333,15 +327,9 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )); then
 	while read -r line; do
 		split_string "${line}" "," array
 		(( ${#array[@]} != 7 )) && { print_error "Skipping invalid line: ${line}" >&2; continue; }
-
 		geoname_id="${array[0]}"
-		locale_code="${array[1]}"
-		continent_code="${array[2]}"
 		continent_name="${array[3]}"
-		country_iso_code="${array[4]}"
 		country_name="${array[5]}"
-		is_in_european_union="${array[6]}"
-
 		if [[ "${country_name}" != "" ]]; then
 			country_ids["${country_name,,}"]="${geoname_id}"
 		else
@@ -355,32 +343,25 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )); then
 		print_normal "Generating GeoLite2 blocklist '${country}'..."
 		printf -v dst "${tmpdir}/${GL2_FOUT1}" "${country,,}"
 		> "${dst}"
-		#for ipv in IPv4 IPv6; do                                                                   # TODO: IPv6 disabled for now (see header of script for details)
-		for ipv in IPv4; do
+		for ipv in "${GL2_IPVS[@]}"; do
 			printf -v src "${tmpdir}/${GL2_FIN3}" "${ipv,,}"
-			[[ "${ipv}" == "IPv4" ]] && sort_opts="--version-sort"
-			#while read -r cidr; do                                                                 # not using this variant as it weirdly interferes with trap handling
-			#	cidr_to_range_${ipv,,} "${cidr}" sips eips
-			#	#printf "GeoLite2 %s %s:%s-%s\n" "${country}" "${ipv}" "${sips}" "${eips}" >&2      # use this for terminal output
-			#	#printf "GeoLite2 %s:%s-%s\n" "${country}" "${sips}" "${eips}"                      # use this for comparison with older script versions
-			#	printf "GeoLite2 %s %s:%s-%s\n" "${country}" "${ipv}" "${sips}" "${eips}"           # normal output
-			#done < <(grep --no-filename "${country_ids["${country,,}"]}" "${src}" | awk --field-separator ',' '{ print $1 }') | sort ${sort_opts} | uniq >> "${dst}"
+			[[ "${ipv}" == "IPv4" ]] && sort_opts="--version-sort" || sort_opts=""
 			grep --no-filename "${country_ids["${country,,}"]}" "${src}" | awk --field-separator ',' '{ print $1 }' | \
 				while read -r cidr; do
 					cidr_to_range_${ipv,,} "${cidr}" sips eips
-					#printf "GeoLite2 %s %s:%s-%s\n" "${country}" "${ipv}" "${sips}" "${eips}" >&2  # use this for terminal output
-					printf "GeoLite2 %s:%s-%s\n" "${country}" "${sips}" "${eips}"                  # use this for comparison with older script revisions
-					#printf "GeoLite2 %s %s:%s-%s\n" "${country}" "${ipv}" "${sips}" "${eips}"       # normal output
+					printf "GeoLite2 %s %s:%s-%s\n" "${country}" "${ipv}" "${sips}" "${eips}"
 				done | sort ${sort_opts} | uniq >> "${dst}"
 		done
 	done
 
-	# Merge blocklists
+	# Merge blocklists (NOTE: we have to sort in order to be able to uniq;
+	# version sort works well for IPv4, but not for IPv6; sed removes empty
+	# lines and comment lines)
 	print_light "Merging GeoLite2 blocklists..."
 	readarray -t src < <(printf "${tmpdir}/${GL2_FOUT1}\n" "${GL2_COUNTRIES[@],,}")
 	dst="${tmpdir}/${GL2_FOUT2}"
-	cat "${src[@]}" | sort --version-sort | uniq > "${dst}"                                         # Version sort works well for IPv4, but not for IPv6 (requires alphanumerical sort); We *have* to sort in order to uniq, so we use version sort as IPv4 is dominant anyway
-	sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"                            # Remove empty lines and comment lines (there should be none)
+	cat "${src[@]}" | sort --version-sort | uniq > "${dst}"
+	sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"
 
 else
 	touch "${tmpdir}/${GL2_FOUT2}"
@@ -406,5 +387,5 @@ dst="${INSTALL_TO}"
 cp "${src}" "${dst}"
 
 # Return home safely
-(( ${notify} == 1 )) && notify-send --urgency=normal --app-name="${PROG_NAME}" "IP filter successfully updated."
+(( ${notify} == 1 )) && notify-send --urgency=normal --app-name="${PROG_TITLE}" "IP filter successfully updated."
 exit 0
