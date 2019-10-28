@@ -1,7 +1,7 @@
 # ipfilter
 IP Filter Updater &amp; Generator
 ## Requirements
-Bash >= 4.0, wget, gunzip, unzip, sed, grep, notify-send (only if using option '--notify')
+Bash >= 4.0, wget, gunzip, unzip, sed, grep, notify-send (only if using option `--notify`)
 ## Download
 ```
 # git clone https://github.com/fonic/ipfilter.git
