@@ -4,7 +4,7 @@
 #                                                                         -
 #  IP Filter Updater & Generator                                          -
 #                                                                         -
-#  Created by Fonic (https://github.com/fonic/ipfilter)                   -
+#  Created by Fonic (https://github.com/fonic)                            -
 #  Date: 10/28/19                                                         -
 #                                                                         -
 # -------------------------------------------------------------------------
@@ -17,8 +17,8 @@
 
 # Program
 PROG_TITLE="IP Filter Updater & Generator"
-PROG_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROG_EXEC="$(basename "${BASH_SOURCE[0]}")"
+PROG_BASE="$(cd "$(dirname "$0")" && pwd)"
+PROG_EXEC="$(basename "$0")"
 PROG_NAME="${PROG_EXEC%.*}"
 PROG_CONFIG="${PROG_BASE}/${PROG_NAME}.conf"
 
@@ -40,7 +40,7 @@ GL2_FIN3="geolite2-country-blocks-%s.csv"
 GL2_FOUT1="geolite2-%s.p2p"
 GL2_FOUT2="geolite2-merged.p2p"
 GL2_COUNTRIES=()
-GL2_IPVS=("IPv4")
+GL2_IPVERS=("IPv4")
 
 # Final output file, install destination
 FINAL_FILE="ipfilter.p2p"
@@ -63,35 +63,24 @@ function print_normal() {
 	echo -e "$*"
 }
 
-# Print highlighted message [$*: message]
-function print_light() {
+# Print highlight message [$*: message]
+function print_hilite() {
 	echo -e "\e[1m$*\e[0m"
 }
 
-# Print positive message [$*: message]
+# Print good message [$*: message]
 function print_good() {
 	echo -e "\e[1;32m$*\e[0m"
 }
 
-# Print warning message [$*: message]
-function print_warning() {
+# Print warn message [$*: message]
+function print_warn() {
 	echo -e "\e[1;33m$*\e[0m"
 }
 
 # Print error message [$*: message]
 function print_error() {
 	echo -e "\e[1;31m$*\e[0m"
-}
-
-# Handler for error trap [no arguments] (NOTE: redirection to stderr is
-# important for this to work inside of pipes / process substitution;
-# sending TERM signal to ourselves to realiably exit even if trap occurs
-# in subshell)
-function error_trap() {
-	print_error "An error occured, aborting." >&2
-	(( ${notify} == 1 )) && notify-send --urgency=critical --app-name="${PROG_TITLE}" "An error occurred while updating." "Please check output for errors."
-	kill -s TERM $$
-	exit 1
 }
 
 # Check if item is element of array [$1: item, $2..$n: array elements]
@@ -102,6 +91,41 @@ function in_array() {
 		shift
 	done
 	return 1
+}
+
+# Send desktop notification [$1: urgency, $2: application name, $3: message summary, $4: message body (optional)]
+function notify() {
+	# If script is run as/by root, determine user running desktop environment
+	# and use su to send notification -> https://stackoverflow.com/a/49533938
+	if (( ${EUID} == 0 )); then
+		local display=":$(ls /tmp/.X11-unix/* | sed 's|/tmp/.X11-unix/X||' | head -n 1)"
+		local user="$(who | grep "(${display})" | awk '{ print $1 }' | head -n 1)"
+		su "${user}" -c "DISPLAY=\"${display}\" notify-send --urgency=\"$1\" --app-name=\"$2\" \"$3\" \"${4:-}\""
+		return $?
+	fi
+
+	# If DISPLAY is not set or empty, try to determine its value and try to
+	# send notification to that display (probably only works for same user)
+	if [[ -z "${DISPLAY:-}" ]]; then
+		local display=":$(ls /tmp/.X11-unix/* | sed 's|/tmp/.X11-unix/X||' | head -n 1)"
+		DISPLAY="${display}" notify-send --urgency="$1" --app-name="$2" "$3" "${4:-}"
+		return $?
+	fi
+
+	# Send notification normally
+	notify-send --urgency="$1" --app-name="$2" "$3" "${4:-}"
+	return $?
+}
+
+# Handler for error trap [no arguments] (NOTE: redirection to stderr is
+# important for this to work inside of pipes / process substitution;
+# sending TERM signal to ourselves to realiably exit even if trap occurs
+# in subshell)
+function error_trap() {
+	print_error "An error occured, aborting." >&2
+	(( ${notify} == 1 )) && notify critical "${PROG_TITLE}" "An error occurred while updating." "Please check output for errors."
+	kill -s TERM $$
+	exit 1
 }
 
 # Split string into array [$1: string, $2: separator (single character), $3: name of target array variable]
@@ -201,9 +225,10 @@ function cidr_to_range_ipv6() {
 #                                      -
 # --------------------------------------
 
-# Set extended Bash options, set error trap (NOTE: elaborate approach to
+# Set extended shell options, set error trap (NOTE: elaborate approach to
 # reliably exit even if an error occurs in subshell / process substitution
 # -> https://stackoverflow.com/a/9894126)
+#set -eEou pipefail
 set -eEou pipefail
 trap "exit 1" TERM; trap "error_trap" ERR
 
@@ -217,7 +242,7 @@ trap "print_normal" EXIT
 # Set window title, print title
 set_window_title "${PROG_TITLE}"
 print_normal
-print_light "--== ${PROG_TITLE} ==--"
+print_hilite "--== ${PROG_TITLE} ==--"
 print_normal
 
 # Provide help if requested (NOTE: we do this separately so that help shows
@@ -242,20 +267,20 @@ for arg in "$@"; do
 	case "${arg}" in
 		"-n"|"--notify")    notify=1; ;;
 		"-k"|"--keep-temp") keep_temp=1; ;;
-		*)                  print_normal "Invalid argument '${arg}'"; invalid_args=1; ;;
+		*)                  print_normal "Invalid option '${arg}'"; invalid_args=1; ;;
 	esac
 done
 if (( ${invalid_args} == 1 )); then
 	print_normal
-	print_error "Invalid command line. Use '--help' to display usage information."
+	print_warn "Invalid command line. Use '--help' to display usage information."
 	exit 2
 fi
 
 # Create temporary folder, set cleanup trap (NOTE: replaces EXIT trap set
 # above for cosmetic reasons)
-print_light "Creating temporary folder..."
+print_hilite "Creating temporary folder..."
 tmpdir="$(mktemp --directory --tmpdir=/tmp "${PROG_NAME}.XXXXXXXXXX")"
-(( ${keep_temp} == 0 )) && trap "print_light \"Removing temporary folder...\"; rm -rf \"${tmpdir}\"; print_normal" EXIT
+(( ${keep_temp} == 0 )) && trap "print_hilite \"Removing temporary folder...\"; rm -rf \"${tmpdir}\"; print_normal" EXIT
 
 
 # --------------------------------------
@@ -267,7 +292,7 @@ tmpdir="$(mktemp --directory --tmpdir=/tmp "${PROG_NAME}.XXXXXXXXXX")"
 if (( ${#IBL_LISTS[@]} > 0 )); then
 
 	# Download blocklists
-	print_light "Downloading I-BlockList blocklists..."
+	print_hilite "Downloading I-BlockList blocklists..."
 	for list in "${!IBL_LISTS[@]}"; do
 		print_normal "Downloading I-BlockList blocklist '${list}'..."
 		printf -v src "${IBL_URL}" "${IBL_LISTS["${list}"]}"
@@ -276,7 +301,7 @@ if (( ${#IBL_LISTS[@]} > 0 )); then
 	done
 
 	# Decompress blocklists
-	print_light "Decompressing I-BlockList blocklists..."
+	print_hilite "Decompressing I-BlockList blocklists..."
 	for list in "${!IBL_LISTS[@]}"; do
 		print_normal "Decompressing I-BlockList blocklist '${list}'..."
 		printf -v src "${tmpdir}/${IBL_FIN1}" "${list}"
@@ -284,10 +309,11 @@ if (( ${#IBL_LISTS[@]} > 0 )); then
 		gunzip < "${src}" > "${dst}"
 	done
 
-	# Merge blocklists (NOTE: we have to sort in order to be able to uniq;
-	# version sort works well for IPv4, but not for IPv6; sed removes empty
-	# lines and comment lines)
-	print_light "Merging I-BlockList blocklists..."
+	# Merge blocklists (NOTE: version sort works well for IPv4; for IPv6,
+	# alphanumerical sort is required; since we have to sort for uniq and
+	# IPv4 is dominant anyway, version sort is being used; sed command is
+	# used to remove empty and comment lines)
+	print_hilite "Merging I-BlockList blocklists..."
 	readarray -t src < <(printf "${tmpdir}/${IBL_FIN2}\n" "${!IBL_LISTS[@]}")
 	dst="${tmpdir}/${IBL_FOUT}"
 	cat "${src[@]}" | sort --version-sort | uniq > "${dst}"
@@ -307,13 +333,13 @@ fi
 if (( ${#GL2_COUNTRIES[@]} > 0 )); then
 
 	# Download database
-	print_light "Downloading GeoLite2 database..."
+	print_hilite "Downloading GeoLite2 database..."
 	src="${GL2_URL}"
 	dst="${tmpdir}/${GL2_FIN1}"
 	wget "${WGET_OPTS[@]}" "${src}" -O "${dst}"
 
 	# Extract database
-	print_light "Extracting GeoLite2 database..."
+	print_hilite "Extracting GeoLite2 database..."
 	src="${tmpdir}/${GL2_FIN1}"
 	dst="${tmpdir}"
 	unzip -q -o -j -LL "${src}" '*.csv' -d "${dst}"
@@ -321,7 +347,7 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )); then
 	# Parse country locations, generate dict country names -> ids (NOTE: using
 	# split_string here as it deals perfectly with quotes, separators in items
 	# etc.; performance is not relevant here)
-	print_light "Parsing GeoLite2 countries..."
+	print_hilite "Parsing GeoLite2 countries..."
 	src="${tmpdir}/${GL2_FIN2}"
 	declare -A country_ids
 	while read -r line; do
@@ -337,8 +363,9 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )); then
 		fi
 	done < <(tail -q -n +2 "${src}")
 
-	# Parse country blocks, generate country blocklists (NOTE: performance-critical!)
-	print_light "Generating GeoLite2 blocklists..."
+	# Parse country blocks, generate country blocklists (NOTE: most, probably
+	# only performance-critical part of script)
+	print_hilite "Generating GeoLite2 blocklists..."
 	for country in "${GL2_COUNTRIES[@]}"; do
 		print_normal "Generating GeoLite2 blocklist '${country}'..."
 		printf -v dst "${tmpdir}/${GL2_FOUT1}" "${country,,}"
@@ -354,10 +381,11 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )); then
 		done
 	done
 
-	# Merge blocklists (NOTE: we have to sort in order to be able to uniq;
-	# version sort works well for IPv4, but not for IPv6; sed removes empty
-	# lines and comment lines)
-	print_light "Merging GeoLite2 blocklists..."
+	# Merge blocklists (NOTE: version sort works well for IPv4; for IPv6,
+	# alphanumerical sort is required; since we have to sort for uniq and
+	# IPv4 is dominant anyway, version sort is being used; sed command is
+	# used to remove empty and comment lines)
+	print_hilite "Merging GeoLite2 blocklists..."
 	readarray -t src < <(printf "${tmpdir}/${GL2_FOUT1}\n" "${GL2_COUNTRIES[@],,}")
 	dst="${tmpdir}/${GL2_FOUT2}"
 	cat "${src[@]}" | sort --version-sort | uniq > "${dst}"
@@ -375,17 +403,17 @@ fi
 # --------------------------------------
 
 # Merge I-BlockList and GeoLite2 blocklists
-print_light "Merging I-BlockList and GeoLite2 blocklists..."
+print_hilite "Merging I-BlockList and GeoLite2 blocklists..."
 readarray -t src < <(printf "${tmpdir}/%s\n" "${IBL_FOUT}" "${GL2_FOUT2}")
 dst="${tmpdir}/${FINAL_FILE}"
 cat "${src[@]}" > "${dst}"
 
-# Install IP-Filter blocklist
-print_light "Installing IP-Filter blocklist..."
+# Install final IP filter blocklist
+print_hilite "Installing final IP filter blocklist..."
 src="${tmpdir}/${FINAL_FILE}"
 dst="${INSTALL_TO}"
 cp "${src}" "${dst}"
 
 # Return home safely
-(( ${notify} == 1 )) && notify-send --urgency=normal --app-name="${PROG_TITLE}" "IP filter successfully updated."
+(( ${notify} == 1 )) && notify normal "${PROG_TITLE}" "IP filter successfully updated."
 exit 0
