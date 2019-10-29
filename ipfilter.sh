@@ -15,12 +15,12 @@
 #                                      -
 # --------------------------------------
 
-# Program
-PROG_TITLE="IP Filter Updater & Generator"
-PROG_BASE="$(cd "$(dirname "$0")" && pwd)"
-PROG_EXEC="$(basename "$0")"
-PROG_NAME="${PROG_EXEC%.*}"
-PROG_CONFIG="${PROG_BASE}/${PROG_NAME}.conf"
+# Script
+SCRIPT_TITLE="IP Filter Updater & Generator"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_FILE="$(basename "$0")"
+SCRIPT_NAME="${SCRIPT_FILE%.*}"
+SCRIPT_CONFIG="${SCRIPT_DIR}/${SCRIPT_NAME}.conf"
 
 # Wget options
 WGET_OPTS=("--quiet" "--tries=3" "--timeout=15")
@@ -44,7 +44,7 @@ GL2_IPVERS=("IPv4")
 
 # Final output file, install destination
 FINAL_FILE="ipfilter.p2p"
-INSTALL_TO="${PROG_BASE}/${PROG_NAME}.p2p"
+INSTALL_DST="${SCRIPT_DIR}/${SCRIPT_NAME}.p2p"
 
 
 # --------------------------------------
@@ -63,7 +63,7 @@ function print_normal() {
 	echo -e "$*"
 }
 
-# Print highlight message [$*: message]
+# Print hilite message [$*: message]
 function print_hilite() {
 	echo -e "\e[1m$*\e[0m"
 }
@@ -123,7 +123,7 @@ function notify() {
 # in subshell)
 function error_trap() {
 	print_error "An error occured, aborting." >&2
-	(( ${notify} == 1 )) && notify critical "${PROG_TITLE}" "An error occurred while updating." "Please check output for errors."
+	(( ${notify} == 1 )) && notify critical "${SCRIPT_TITLE}" "An error occurred while updating." "Please check output for errors."
 	kill -s TERM $$
 	exit 1
 }
@@ -236,13 +236,13 @@ trap "exit 1" TERM; trap "error_trap" ERR
 trap "trap - ERR; echo -en \"\r\e[2K\"" INT
 trap "print_normal" EXIT
 
-# Source configuration file if present and readable
-[[ -r "${PROG_CONFIG}" ]] && source "${PROG_CONFIG}"
+# Source configuration file present
+[[ -e "${SCRIPT_CONFIG}" ]] && source "${SCRIPT_CONFIG}"
 
 # Set window title, print title
-set_window_title "${PROG_TITLE}"
+set_window_title "${SCRIPT_TITLE}"
 print_normal
-print_hilite "--== ${PROG_TITLE} ==--"
+print_hilite "--== ${SCRIPT_TITLE} ==--"
 print_normal
 
 # Provide help if requested (NOTE: we do this separately so that help shows
@@ -279,7 +279,7 @@ fi
 # Create temporary folder, set cleanup trap (NOTE: replaces EXIT trap set
 # above for cosmetic reasons)
 print_hilite "Creating temporary folder..."
-tmpdir="$(mktemp --directory --tmpdir=/tmp "${PROG_NAME}.XXXXXXXXXX")"
+tmpdir="$(mktemp --directory --tmpdir=/tmp "${SCRIPT_NAME}.XXXXXXXXXX")"
 (( ${keep_temp} == 0 )) && trap "print_hilite \"Removing temporary folder...\"; rm -rf \"${tmpdir}\"; print_normal" EXIT
 
 
@@ -411,9 +411,9 @@ cat "${src[@]}" > "${dst}"
 # Install final IP filter blocklist
 print_hilite "Installing final IP filter blocklist..."
 src="${tmpdir}/${FINAL_FILE}"
-dst="${INSTALL_TO}"
+dst="${INSTALL_DST}"
 cp "${src}" "${dst}"
 
 # Return home safely
-(( ${notify} == 1 )) && notify normal "${PROG_TITLE}" "IP filter successfully updated."
+(( ${notify} == 1 )) && notify normal "${SCRIPT_TITLE}" "IP filter successfully updated."
 exit 0

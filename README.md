@@ -3,7 +3,7 @@ IP Filter Updater &amp; Generator
 ## Requirements
 Bash >= 4.0, wget, gunzip, unzip, sed, grep, notify-send (optional, required for option `--notify`).
 
-Shells other than Bash might work, but will most likely require some modifications.
+Shells other than Bash *might* work, but will most likely require some modifications.
 ## Download
 ```
 # git clone https://github.com/fonic/ipfilter.git
