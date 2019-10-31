@@ -1,5 +1,7 @@
 # ipfilter
 IP Filter Updater &amp; Generator
+
+Updates/generates .p2p blocklist from I-Blocklist blocklists and GeoLite2 country blocks.
 ## Requirements
 Bash >= 4.0, wget, gunzip, unzip, sed, grep, notify-send (optional, required for option `--notify`).
 

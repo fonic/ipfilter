@@ -5,7 +5,7 @@
 #  IP Filter Updater & Generator                                          -
 #                                                                         -
 #  Created by Fonic (https://github.com/fonic)                            -
-#  Date: 10/28/19                                                         -
+#  Date: 10/30/19                                                         -
 #                                                                         -
 # -------------------------------------------------------------------------
 
