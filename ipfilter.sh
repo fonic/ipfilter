@@ -1,11 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # -------------------------------------------------------------------------
 #                                                                         -
 #  IP Filter Updater & Generator                                          -
 #                                                                         -
 #  Created by Fonic (https://github.com/fonic)                            -
-#  Date: 10/30/19                                                         -
+#  Date: 12/21/19                                                         -
 #                                                                         -
 # -------------------------------------------------------------------------
 
@@ -260,9 +260,7 @@ if in_array "-h" "$@" || in_array "--help" "$@"; then
 fi
 
 # Parse command line
-notify=0
-keep_temp=0
-invalid_args=0
+notify=0; keep_temp=0; invalid_args=0
 for arg in "$@"; do
 	case "${arg}" in
 		"-n"|"--notify")    notify=1; ;;
