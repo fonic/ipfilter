@@ -5,7 +5,7 @@
 #  IP Filter Updater & Generator                                          -
 #                                                                         -
 #  Created by Fonic (https://github.com/fonic)                            -
-#  Date: 12/21/19                                                         -
+#  Date: 01/01/20                                                         -
 #                                                                         -
 # -------------------------------------------------------------------------
 
@@ -33,12 +33,13 @@ IBL_FOUT="iblocklist-merged.p2p"
 declare -A IBL_LISTS=(["level1"]="ydxerpxkpcfqjaybcssw" ["level2"]="gyisgnzbhppbvsphucsw" ["level3"]="uwnukjqktoggdknzrhgh")
 
 # GeoLite2 (https://dev.maxmind.com/geoip/geoip2/geolite2)
-GL2_URL="https://geolite.maxmind.com/download/geoip/database/GeoLite2-Country-CSV.zip"
+GL2_URL="https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-Country-CSV&license_key=%s&suffix=zip"
 GL2_FIN1="geolite2-country-database.zip"
 GL2_FIN2="geolite2-country-locations-en.csv"
 GL2_FIN3="geolite2-country-blocks-%s.csv"
 GL2_FOUT1="geolite2-%s.p2p"
 GL2_FOUT2="geolite2-merged.p2p"
+GL2_LICENSE=""
 GL2_COUNTRIES=()
 GL2_IPVERS=("IPv4")
 
@@ -328,11 +329,11 @@ fi
 #                                      -
 # --------------------------------------
 
-if (( ${#GL2_COUNTRIES[@]} > 0 )); then
+if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 
 	# Download database
 	print_hilite "Downloading GeoLite2 database..."
-	src="${GL2_URL}"
+	printf -v src "${GL2_URL}" "${GL2_LICENSE}"
 	dst="${tmpdir}/${GL2_FIN1}"
 	wget "${WGET_OPTS[@]}" "${src}" -O "${dst}"
 
