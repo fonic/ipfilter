@@ -5,7 +5,7 @@
 #  IP Filter Updater & Generator                                          -
 #                                                                         -
 #  Created by Fonic (https://github.com/fonic)                            -
-#  Date: 01/01/20                                                         -
+#  Date: 01/17/20                                                         -
 #                                                                         -
 # -------------------------------------------------------------------------
 
@@ -96,6 +96,12 @@ function in_array() {
 
 # Send desktop notification [$1: urgency, $2: application name, $3: message summary, $4: message body (optional)]
 function notify() {
+	# macOS notification -> https://code-maven.com/display-notification-from-the-mac-command-line
+	if [[ "${OSTYPE}" == "darwin"* ]]; then
+		osascript -e "display notification \"${4:-}\" with title \"$2\" subtitle \"$3\""
+		return $?
+	fi
+
 	# If script is run as/by root, determine user running desktop environment
 	# and use su to send notification -> https://stackoverflow.com/a/49533938
 	if (( ${EUID} == 0 )); then
@@ -278,7 +284,11 @@ fi
 # Create temporary folder, set cleanup trap (NOTE: replaces EXIT trap set
 # above for cosmetic reasons)
 print_hilite "Creating temporary folder..."
-tmpdir="$(mktemp --directory --tmpdir=/tmp "${SCRIPT_NAME}.XXXXXXXXXX")"
+if [[ "${OSTYPE}" == "darwin"* ]]; then
+	tmpdir="$(mktemp -d "/tmp/${SCRIPT_NAME}.XXXXXXXXXX")"
+else
+	tmpdir="$(mktemp --directory --tmpdir=/tmp "${SCRIPT_NAME}.XXXXXXXXXX")"
+fi
 (( ${keep_temp} == 0 )) && trap "print_hilite \"Removing temporary folder...\"; rm -rf \"${tmpdir}\"; print_normal" EXIT
 
 
@@ -316,7 +326,11 @@ if (( ${#IBL_LISTS[@]} > 0 )); then
 	readarray -t src < <(printf "${tmpdir}/${IBL_FIN2}\n" "${!IBL_LISTS[@]}")
 	dst="${tmpdir}/${IBL_FOUT}"
 	cat "${src[@]}" | sort --version-sort | uniq > "${dst}"
-	sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"
+	if [[ "${OSTYPE}" == "darwin"* ]]; then
+		sed -i "" -e '/^$/d' -e '/^#.*$/d' "${dst}"
+	else
+		sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"
+	fi
 
 else
 	touch "${tmpdir}/${IBL_FOUT}"
@@ -372,11 +386,19 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 		for ipv in "${GL2_IPVERS[@]}"; do
 			printf -v src "${tmpdir}/${GL2_FIN3}" "${ipv,,}"
 			[[ "${ipv}" == "IPv4" ]] && sort_opts="--version-sort" || sort_opts=""
-			grep --no-filename "${country_ids["${country,,}"]}" "${src}" | awk --field-separator ',' '{ print $1 }' | \
-				while read -r cidr; do
-					cidr_to_range_${ipv,,} "${cidr}" sips eips
-					printf "GeoLite2 %s %s:%s-%s\n" "${country}" "${ipv}" "${sips}" "${eips}"
-				done | sort ${sort_opts} | uniq >> "${dst}"
+			if [[ "${OSTYPE}" == "darwin"* ]]; then
+				grep --no-filename "${country_ids["${country,,}"]}" "${src}" | awk -F ',' '{ print $1 }' | \
+					while read -r cidr; do
+						cidr_to_range_${ipv,,} "${cidr}" sips eips
+						printf "GeoLite2 %s %s:%s-%s\n" "${country}" "${ipv}" "${sips}" "${eips}"
+					done | sort ${sort_opts} | uniq >> "${dst}"
+			else
+				grep --no-filename "${country_ids["${country,,}"]}" "${src}" | awk --field-separator ',' '{ print $1 }' | \
+					while read -r cidr; do
+						cidr_to_range_${ipv,,} "${cidr}" sips eips
+						printf "GeoLite2 %s %s:%s-%s\n" "${country}" "${ipv}" "${sips}" "${eips}"
+					done | sort ${sort_opts} | uniq >> "${dst}"
+			fi
 		done
 	done
 
@@ -388,7 +410,11 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 	readarray -t src < <(printf "${tmpdir}/${GL2_FOUT1}\n" "${GL2_COUNTRIES[@],,}")
 	dst="${tmpdir}/${GL2_FOUT2}"
 	cat "${src[@]}" | sort --version-sort | uniq > "${dst}"
-	sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"
+	if [[ "${OSTYPE}" == "darwin"* ]]; then
+		sed -i "" -e '/^$/d' -e '/^#.*$/d' "${dst}"
+	else
+		sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"
+	fi
 
 else
 	touch "${tmpdir}/${GL2_FOUT2}"

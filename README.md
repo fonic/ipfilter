@@ -3,9 +3,11 @@ IP Filter Updater &amp; Generator
 
 Updates/generates .p2p blocklist from I-Blocklist blocklists and GeoLite2 country blocks.
 ## Requirements
-Bash >= 4.0, wget, gunzip, unzip, sed, grep, notify-send (optional, required for option `--notify`).
+Bash >= 4.0, wget, gunzip, unzip, sed, grep, notify-send (optional, required for option `--notify` on Linux), osascript (optional, required for option `--notify` on macOS).
 
 Shells other than Bash *might* work, but will most likely require some modifications.
+
+macOS users might want to use [Homebrew](https://brew.sh/) to install missing dependencies.
 ## Download
 ```
 # git clone https://github.com/fonic/ipfilter.git
