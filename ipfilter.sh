@@ -284,7 +284,7 @@ fi
 # Create temporary folder, set cleanup trap (NOTE: replaces EXIT trap set
 # above for cosmetic reasons)
 print_hilite "Creating temporary folder..."
-if [[ "${OSTYPE}" == "darwin"* ]]; then
+if [[ "${OSTYPE}" == "darwin"* || "${OSTYPE}" == "freebsd"* ]]; then
 	tmpdir="$(mktemp -d "/tmp/${SCRIPT_NAME}.XXXXXXXXXX")"
 else
 	tmpdir="$(mktemp --directory --tmpdir=/tmp "${SCRIPT_NAME}.XXXXXXXXXX")"
@@ -326,7 +326,7 @@ if (( ${#IBL_LISTS[@]} > 0 )); then
 	readarray -t src < <(printf "${tmpdir}/${IBL_FIN2}\n" "${!IBL_LISTS[@]}")
 	dst="${tmpdir}/${IBL_FOUT}"
 	cat "${src[@]}" | sort --version-sort | uniq > "${dst}"
-	if [[ "${OSTYPE}" == "darwin"* ]]; then
+	if [[ "${OSTYPE}" == "darwin"* || "${OSTYPE}" == "freebsd"* ]]; then
 		sed -i "" -e '/^$/d' -e '/^#.*$/d' "${dst}"
 	else
 		sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"
@@ -386,7 +386,7 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 		for ipv in "${GL2_IPVERS[@]}"; do
 			printf -v src "${tmpdir}/${GL2_FIN3}" "${ipv,,}"
 			[[ "${ipv}" == "IPv4" ]] && sort_opts="--version-sort" || sort_opts=""
-			if [[ "${OSTYPE}" == "darwin"* ]]; then
+			if [[ "${OSTYPE}" == "darwin"* || "${OSTYPE}" == "freebsd"* ]]; then
 				grep --no-filename "${country_ids["${country,,}"]}" "${src}" | awk -F ',' '{ print $1 }' | \
 					while read -r cidr; do
 						cidr_to_range_${ipv,,} "${cidr}" sips eips
@@ -410,7 +410,7 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 	readarray -t src < <(printf "${tmpdir}/${GL2_FOUT1}\n" "${GL2_COUNTRIES[@],,}")
 	dst="${tmpdir}/${GL2_FOUT2}"
 	cat "${src[@]}" | sort --version-sort | uniq > "${dst}"
-	if [[ "${OSTYPE}" == "darwin"* ]]; then
+	if [[ "${OSTYPE}" == "darwin"* || "${OSTYPE}" == "freebsd"* ]]; then
 		sed -i "" -e '/^$/d' -e '/^#.*$/d' "${dst}"
 	else
 		sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"
