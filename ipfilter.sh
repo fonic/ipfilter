@@ -278,10 +278,10 @@ if in_array "-h" "$@" || in_array "--help" "$@"; then
 	print_normal "Usage: $(basename "$0") [OPTIONS]"
 	print_normal
 	print_normal "Options:"
-	print_normal "  -n, --notify               Send desktop notification when"
-	print_normal "                             done / on error (for cron use)"
-	print_normal "  -k, --keep-temp            Do not remove temp folder when"
-	print_normal "                             done (helpful for debugging)"
+	print_normal "  -n, --notify               Send desktop notification when done"
+	print_normal "                             or an error occurred (for cron use)"
+	print_normal "  -k, --keep-temp            Do not remove temporary folder when"
+	print_normal "                             done (useful for debugging)"
 	print_normal "  -h, --help                 Display this help message"
 	exit 0
 fi
