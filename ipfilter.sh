@@ -43,7 +43,7 @@ CMD_KEEPTEMP=0
 WGET_OPTS=("--quiet" "--tries=3" "--timeout=15")
 
 # I-BlockList (https://www.iblocklist.com/lists)
-IBL_URL="http://list.iblocklist.com/?list=%s&fileformat=p2p&archiveformat=gz"
+IBL_URL="https://list.iblocklist.com/?list=%s&fileformat=p2p&archiveformat=gz"
 IBL_FIN1="iblocklist-%s.p2p.gz"
 IBL_FIN2="iblocklist-%s.p2p"
 IBL_FOUT="iblocklist-merged.p2p"
