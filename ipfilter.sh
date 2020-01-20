@@ -35,7 +35,7 @@ SCRIPT_FILE="$(basename "$0")"
 SCRIPT_NAME="${SCRIPT_FILE%.*}"
 SCRIPT_CONFIG="${SCRIPT_DIR}/${SCRIPT_NAME}.conf"
 
-# Command line arguments
+# Command line options
 CMD_NOTIFY=0
 CMD_KEEPTEMP=0
 
