@@ -5,9 +5,22 @@
 #  IP Filter Updater & Generator                                          -
 #                                                                         -
 #  Created by Fonic (https://github.com/fonic)                            -
-#  Date: 01/17/20                                                         -
+#  Date: 01/20/20                                                         -
 #                                                                         -
 # -------------------------------------------------------------------------
+
+# --------------------------------------
+#                                      -
+#  Early checks                        -
+#                                      -
+# --------------------------------------
+
+# Check Bash version
+if [ -z "${BASH_VERSION}" ] || [ "${BASH_VERSION%%.*}" -lt 4 ]; then
+	echo "This script requires Bash >= 4.0 to run."
+	exit 1
+fi
+
 
 # --------------------------------------
 #                                      -
@@ -21,6 +34,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SCRIPT_FILE="$(basename "$0")"
 SCRIPT_NAME="${SCRIPT_FILE%.*}"
 SCRIPT_CONFIG="${SCRIPT_DIR}/${SCRIPT_NAME}.conf"
+
+# Command line arguments
+CMD_NOTIFY=0
+CMD_KEEPTEMP=0
 
 # Wget options
 WGET_OPTS=("--quiet" "--tries=3" "--timeout=15")
@@ -94,7 +111,14 @@ function in_array() {
 	return 1
 }
 
+# Check if command is available [$1: command]
+function is_cmd_avail() {
+	command -v "$1" &>/dev/null
+	return $?
+}
+
 # Send desktop notification [$1: urgency, $2: application name, $3: message summary, $4: message body (optional)]
+# NOTE: ${4:-} -> required for optional variable if check for unbound variables is enabled (set -u)
 function notify() {
 	# macOS notification -> https://code-maven.com/display-notification-from-the-mac-command-line
 	if [[ "${OSTYPE}" == "darwin"* ]]; then
@@ -130,7 +154,7 @@ function notify() {
 # in subshell)
 function error_trap() {
 	print_error "An error occured, aborting." >&2
-	(( ${notify} == 1 )) && notify critical "${SCRIPT_TITLE}" "An error occurred while updating." "Please check output for errors."
+	(( ${CMD_NOTIFY} == 1 )) && notify critical "${SCRIPT_TITLE}" "An error occurred while updating." "Please check output for errors."
 	kill -s TERM $$
 	exit 1
 }
@@ -235,7 +259,6 @@ function cidr_to_range_ipv6() {
 # Set extended shell options, set error trap (NOTE: elaborate approach to
 # reliably exit even if an error occurs in subshell / process substitution
 # -> https://stackoverflow.com/a/9894126)
-#set -eEou pipefail
 set -eEou pipefail
 trap "exit 1" TERM; trap "error_trap" ERR
 
@@ -243,13 +266,10 @@ trap "exit 1" TERM; trap "error_trap" ERR
 trap "trap - ERR; echo -en \"\r\e[2K\"" INT
 trap "print_normal" EXIT
 
-# Source configuration file present
-[[ -e "${SCRIPT_CONFIG}" ]] && source "${SCRIPT_CONFIG}"
-
 # Set window title, print title
 set_window_title "${SCRIPT_TITLE}"
 print_normal
-print_hilite "--== ${SCRIPT_TITLE} ==--"
+print_hilite "--==[ ${SCRIPT_TITLE} ]==--"
 print_normal
 
 # Provide help if requested (NOTE: we do this separately so that help shows
@@ -267,19 +287,45 @@ if in_array "-h" "$@" || in_array "--help" "$@"; then
 fi
 
 # Parse command line
-notify=0; keep_temp=0; invalid_args=0
+invalid=0
 for arg in "$@"; do
 	case "${arg}" in
-		"-n"|"--notify")    notify=1; ;;
-		"-k"|"--keep-temp") keep_temp=1; ;;
-		*)                  print_normal "Invalid option '${arg}'"; invalid_args=1; ;;
+		"-n"|"--notify")    CMD_NOTIFY=1; ;;
+		"-k"|"--keep-temp") CMD_KEEPTEMP=1; ;;
+		*)                  print_normal "Invalid option '${arg}'"; invalid=$((invalid + 1)); ;;
 	esac
 done
-if (( ${invalid_args} == 1 )); then
+if (( ${invalid} > 0 )); then
 	print_normal
 	print_warn "Invalid command line. Use '--help' to display usage information."
 	exit 2
 fi
+
+# Check command availability (NOTE: we do not check for coreutils like ls,
+# sort, ..., we only check for commands that usually have their own package)
+missing=0
+commands=("awk" "grep" "gunzip" "sed" "unzip" "wget")
+if (( ${CMD_NOTIFY} == 1 )); then
+	if [[ "${OSTYPE}" == "darwin"* ]]; then
+		commands+=("osascript")
+	else
+		commands+=("notify-send")
+	fi
+fi
+for cmd in "${commands[@]}"; do
+	if ! is_cmd_avail "${cmd}"; then
+		print_normal "Command '${cmd}' is not available"
+		missing=$((missing + 1))
+	fi
+done
+if (( ${missing} > 0 )); then
+	print_normal
+	print_warn "One or more required commands are unavailable, please check dependencies."
+	exit 1
+fi
+
+# Source configuration file if present
+[[ -e "${SCRIPT_CONFIG}" ]] && source "${SCRIPT_CONFIG}"
 
 # Create temporary folder, set cleanup trap (NOTE: replaces EXIT trap set
 # above for cosmetic reasons)
@@ -289,7 +335,11 @@ if [[ "${OSTYPE}" == "darwin"* || "${OSTYPE}" == "freebsd"* ]]; then
 else
 	tmpdir="$(mktemp --directory --tmpdir=/tmp "${SCRIPT_NAME}.XXXXXXXXXX")"
 fi
-(( ${keep_temp} == 0 )) && trap "print_hilite \"Removing temporary folder...\"; rm -rf \"${tmpdir}\"; print_normal" EXIT
+if (( ${CMD_KEEPTEMP} == 0 )); then
+	trap "print_hilite \"Removing temporary folder...\"; rm -rf \"${tmpdir}\"; print_normal" EXIT
+else
+	trap "print_normal; print_hilite \"Keeping temporary files in '${tmpdir}'.\"; print_normal" EXIT
+fi
 
 
 # --------------------------------------
@@ -440,5 +490,5 @@ dst="${INSTALL_DST}"
 cp "${src}" "${dst}"
 
 # Return home safely
-(( ${notify} == 1 )) && notify normal "${SCRIPT_TITLE}" "IP filter successfully updated."
+(( ${CMD_NOTIFY} == 1 )) && notify normal "${SCRIPT_TITLE}" "IP filter successfully updated."
 exit 0
