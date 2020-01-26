@@ -5,7 +5,7 @@
 #  IP Filter Updater & Generator                                          -
 #                                                                         -
 #  Created by Fonic (https://github.com/fonic)                            -
-#  Date: 01/20/20                                                         -
+#  Date: 01/26/20                                                         -
 #                                                                         -
 # -------------------------------------------------------------------------
 
@@ -120,14 +120,15 @@ function is_cmd_avail() {
 # Send desktop notification [$1: urgency, $2: application name, $3: message summary, $4: message body (optional)]
 # NOTE: ${4:-} -> required for optional variable if check for unbound variables is enabled (set -u)
 function notify() {
-	# macOS notification -> https://code-maven.com/display-notification-from-the-mac-command-line
+	# On macOS, we use osascript to send notification
+	# (https://code-maven.com/display-notification-from-the-mac-command-line)
 	if [[ "${OSTYPE}" == "darwin"* ]]; then
 		osascript -e "display notification \"${4:-}\" with title \"$2\" subtitle \"$3\""
 		return $?
 	fi
 
-	# If script is run as/by root, determine user running desktop environment
-	# and use su to send notification -> https://stackoverflow.com/a/49533938
+	# If script is run as root, try to determine user running desktop environment
+	# and try to send notification using su -> https://stackoverflow.com/a/49533938
 	if (( ${EUID} == 0 )); then
 		local display=":$(ls /tmp/.X11-unix/* | sed 's|/tmp/.X11-unix/X||' | head -n 1)"
 		local user="$(who | grep "(${display})" | awk '{ print $1 }' | head -n 1)"
@@ -135,8 +136,8 @@ function notify() {
 		return $?
 	fi
 
-	# If DISPLAY is not set or empty, try to determine its value and try to
-	# send notification to that display (probably only works for same user)
+	# If DISPLAY variable is not set or empty, try to determine its value and try
+	# to send notification to that display (probably only works for the same user)
 	if [[ -z "${DISPLAY:-}" ]]; then
 		local display=":$(ls /tmp/.X11-unix/* | sed 's|/tmp/.X11-unix/X||' | head -n 1)"
 		DISPLAY="${display}" notify-send --urgency="$1" --app-name="$2" "$3" "${4:-}"
