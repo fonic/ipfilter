@@ -5,7 +5,7 @@
 #  IP Filter Updater & Generator                                          -
 #                                                                         -
 #  Created by Fonic (https://github.com/fonic)                            -
-#  Date: 01/26/20                                                         -
+#  Date: 02/02/20                                                         -
 #                                                                         -
 # -------------------------------------------------------------------------
 
@@ -41,6 +41,9 @@ CMD_KEEPTEMP=0
 
 # Wget options
 WGET_OPTS=("--quiet" "--tries=3" "--timeout=15")
+
+# Curl options
+CURL_OPTS=("--location" "--silent" "--show-error" "--retry" "2" "--connect-timeout" "15")
 
 # I-BlockList (https://www.iblocklist.com/lists)
 IBL_URL="https://list.iblocklist.com/?list=%s&fileformat=p2p&archiveformat=gz"
@@ -117,22 +120,59 @@ function is_cmd_avail() {
 	return $?
 }
 
-# Send desktop notification [$1: urgency, $2: application name, $3: message summary, $4: message body (optional)]
+# Download file [$1: URL, $2: destination path]
+function download_file() {
+	if is_cmd_avail "wget"; then
+		wget "${WGET_OPTS[@]}" "$1" --output-document="$2"
+		return $?
+	elif is_cmd_avail "curl"; then
+		curl "${CURL_OPTS[@]}" "$1" --output "$2"
+		return $?
+	else
+		print_error "Unable to download '$1': neither command 'wget' nor 'curl' is available"
+		false
+		return 1
+	fi
+}
+
+# Send desktop notification [$1: type ('info'/'error'), $2: application name, $3: message summary, $4: message body (optional)]
 # NOTE: ${4:-} -> required for optional variable if check for unbound variables is enabled (set -u)
 function notify() {
-	# On macOS, we use osascript to send notification
+	# On macOS, we use osascript to send notifications
 	# (https://code-maven.com/display-notification-from-the-mac-command-line)
 	if [[ "${OSTYPE}" == "darwin"* ]]; then
 		osascript -e "display notification \"${4:-}\" with title \"$2\" subtitle \"$3\""
 		return $?
 	fi
 
+	# On Windows, we use powershell to send notifications
+	# (https://stackoverflow.com/a/45902432)
+	if [[ "${OSTYPE}" == "msys"* ]]; then
+		local icon
+		case "$1" in
+			"error") icon="error"; ;;
+			*)       icon="information"; ;;
+		esac
+		local timeout=10
+		local message
+		[[ -z "${4+set}" ]] && message="$3" || message="$3 $4"
+		powershell -c "[reflection.assembly]::loadwithpartialname('System.Windows.Forms'); [reflection.assembly]::loadwithpartialname('System.Drawing'); \$notify = new-object system.windows.forms.notifyicon; \$notify.icon = [System.Drawing.SystemIcons]::${icon}; \$notify.visible = \$true; \$notify.showballoontip(${timeout}, '$2', '${message}', [system.windows.forms.tooltipicon]::None)" &>/dev/null
+		return $?
+	fi
+
+	# Translate type to notify-send's urgency
+	local urgency
+	case "$1" in
+		"error") urgency="critical"; ;;
+		*)       urgency="normal"; ;;
+	esac
+
 	# If script is run as root, try to determine user running desktop environment
 	# and try to send notification using su -> https://stackoverflow.com/a/49533938
 	if (( ${EUID} == 0 )); then
 		local display=":$(ls /tmp/.X11-unix/* | sed 's|/tmp/.X11-unix/X||' | head -n 1)"
 		local user="$(who | grep "(${display})" | awk '{ print $1 }' | head -n 1)"
-		su "${user}" -c "DISPLAY=\"${display}\" notify-send --urgency=\"$1\" --app-name=\"$2\" \"$3\" \"${4:-}\""
+		su "${user}" -c "DISPLAY=\"${display}\" notify-send --urgency=\"${urgency}\" --app-name=\"$2\" \"$3\" \"${4:-}\""
 		return $?
 	fi
 
@@ -140,12 +180,12 @@ function notify() {
 	# to send notification to that display (probably only works for the same user)
 	if [[ -z "${DISPLAY:-}" ]]; then
 		local display=":$(ls /tmp/.X11-unix/* | sed 's|/tmp/.X11-unix/X||' | head -n 1)"
-		DISPLAY="${display}" notify-send --urgency="$1" --app-name="$2" "$3" "${4:-}"
+		DISPLAY="${display}" notify-send --urgency="${urgency}" --app-name="$2" "$3" "${4:-}"
 		return $?
 	fi
 
 	# Send notification normally
-	notify-send --urgency="$1" --app-name="$2" "$3" "${4:-}"
+	notify-send --urgency="${urgency}" --app-name="$2" "$3" "${4:-}"
 	return $?
 }
 
@@ -155,7 +195,7 @@ function notify() {
 # in subshell)
 function error_trap() {
 	print_error "An error occured, aborting." >&2
-	(( ${CMD_NOTIFY} == 1 )) && notify critical "${SCRIPT_TITLE}" "An error occurred while updating." "Please check output for errors."
+	(( ${CMD_NOTIFY} == 1 )) && notify error "${SCRIPT_TITLE}" "An error occurred while updating." "Please check output for errors."
 	kill -s TERM $$
 	exit 1
 }
@@ -274,7 +314,8 @@ print_hilite "--==[ ${SCRIPT_TITLE} ]==--"
 print_normal
 
 # Provide help if requested (NOTE: we do this separately so that help shows
-# up when -h/--help is present, even if there are further/invalid options)
+# up whenever -h/--help is present, even if there are further valid/invalid
+# options present)
 if in_array "-h" "$@" || in_array "--help" "$@"; then
 	print_normal "Usage: $(basename "$0") [OPTIONS]"
 	print_normal
@@ -302,13 +343,15 @@ if (( ${invalid} > 0 )); then
 	exit 2
 fi
 
-# Check command availability (NOTE: we do not check for coreutils like ls,
+# Check command availability (NOTE: we do not check for coreutils like cat,
 # sort, ..., we only check for commands that usually have their own package)
 missing=0
-commands=("awk" "grep" "gunzip" "sed" "unzip" "wget")
+commands=("awk" "grep" "gunzip" "sed" "unzip")
 if (( ${CMD_NOTIFY} == 1 )); then
 	if [[ "${OSTYPE}" == "darwin"* ]]; then
 		commands+=("osascript")
+	elif [[ "${OSTYPE}" == "msys"* ]]; then
+		commands+=("powershell")
 	else
 		commands+=("notify-send")
 	fi
@@ -319,6 +362,10 @@ for cmd in "${commands[@]}"; do
 		missing=$((missing + 1))
 	fi
 done
+if ! is_cmd_avail "wget" && ! is_cmd_avail "curl"; then
+	print_normal "Neither command 'wget' nor 'curl' is available"
+	missing=$((missing + 1))
+fi
 if (( ${missing} > 0 )); then
 	print_normal
 	print_warn "One or more required commands are unavailable, please check dependencies."
@@ -357,7 +404,7 @@ if (( ${#IBL_LISTS[@]} > 0 )); then
 		print_normal "Downloading I-BlockList blocklist '${list}'..."
 		printf -v src "${IBL_URL}" "${IBL_LISTS["${list}"]}"
 		printf -v dst "${tmpdir}/${IBL_FIN1}" "${list}"
-		wget "${WGET_OPTS[@]}" "${src}" -O "${dst}"
+		download_file "${src}" "${dst}"
 	done
 
 	# Decompress blocklists
@@ -400,13 +447,17 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 	print_hilite "Downloading GeoLite2 database..."
 	printf -v src "${GL2_URL}" "${GL2_LICENSE}"
 	dst="${tmpdir}/${GL2_FIN1}"
-	wget "${WGET_OPTS[@]}" "${src}" -O "${dst}"
+	download_file "${src}" "${dst}"
 
 	# Extract database
 	print_hilite "Extracting GeoLite2 database..."
 	src="${tmpdir}/${GL2_FIN1}"
 	dst="${tmpdir}"
-	unzip -q -o -j -LL "${src}" '*.csv' -d "${dst}"
+	if [[ "${OSTYPE}" == "msys"* ]]; then
+		unzip -q -o -j -LL "${src}" -d "${dst}"
+	else
+		unzip -q -o -j -LL "${src}" '*.csv' -d "${dst}"
+	fi
 
 	# Parse country locations, generate dict country names -> ids (NOTE: using
 	# split_string here as it deals perfectly with quotes, separators in items
@@ -491,5 +542,5 @@ dst="${INSTALL_DST}"
 cp "${src}" "${dst}"
 
 # Return home safely
-(( ${CMD_NOTIFY} == 1 )) && notify normal "${SCRIPT_TITLE}" "IP filter successfully updated."
+(( ${CMD_NOTIFY} == 1 )) && notify info "${SCRIPT_TITLE}" "IP filter successfully updated."
 exit 0
