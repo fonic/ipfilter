@@ -138,14 +138,14 @@ function download_file() {
 # Send desktop notification [$1: type ('info'/'error'), $2: application name, $3: message summary, $4: message body (optional)]
 # NOTE: ${4:-} -> required for optional variable if check for unbound variables is enabled (set -u)
 function notify() {
-	# On macOS, we use osascript to send notifications
+	# On macOS, use osascript to send notification
 	# (https://code-maven.com/display-notification-from-the-mac-command-line)
 	if [[ "${OSTYPE}" == "darwin"* ]]; then
 		osascript -e "display notification \"${4:-}\" with title \"$2\" subtitle \"$3\""
 		return $?
 	fi
 
-	# On Windows, we use powershell to send notifications
+	# On Windows, use powershell to send notification
 	# (https://stackoverflow.com/a/45902432)
 	if [[ "${OSTYPE}" == "msys"* ]]; then
 		local icon
@@ -357,10 +357,7 @@ if (( ${CMD_NOTIFY} == 1 )); then
 	fi
 fi
 for cmd in "${commands[@]}"; do
-	if ! is_cmd_avail "${cmd}"; then
-		print_normal "Command '${cmd}' is not available"
-		missing=$((missing + 1))
-	fi
+	is_cmd_avail "${cmd}" || { print_normal "Command '${cmd}' is not available"; missing=$((missing + 1)); }
 done
 if ! is_cmd_avail "wget" && ! is_cmd_avail "curl"; then
 	print_normal "Neither command 'wget' nor 'curl' is available"
@@ -396,6 +393,7 @@ fi
 #                                      -
 # --------------------------------------
 
+> "${tmpdir}/${IBL_FOUT}"
 if (( ${#IBL_LISTS[@]} > 0 )); then
 
 	# Download blocklists
@@ -430,8 +428,6 @@ if (( ${#IBL_LISTS[@]} > 0 )); then
 		sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"
 	fi
 
-else
-	touch "${tmpdir}/${IBL_FOUT}"
 fi
 
 
@@ -441,6 +437,7 @@ fi
 #                                      -
 # --------------------------------------
 
+> "${tmpdir}/${GL2_FOUT2}"
 if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 
 	# Download database
@@ -481,13 +478,17 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 	# Parse country blocks, generate country blocklists (NOTE: most, probably
 	# only performance-critical part of script)
 	print_hilite "Generating GeoLite2 blocklists..."
+	countries=()
 	for country in "${GL2_COUNTRIES[@]}"; do
+		in_array "${country,,}" "${!country_ids[@]}" || { print_warn "Skipping invalid country '${country}' in setting GL2_COUNTRIES"; continue; }
 		print_normal "Generating GeoLite2 blocklist '${country}'..."
+		countries+=("${country}")
 		printf -v dst "${tmpdir}/${GL2_FOUT1}" "${country,,}"
 		> "${dst}"
 		for ipv in "${GL2_IPVERS[@]}"; do
+			[[ "${ipv,,}" != "ipv4" && "${ipv,,}" != "ipv6" ]] && { print_warn "Skipping invalid IP version '${ipv}' in setting GL2_IPVERS"; continue; }
 			printf -v src "${tmpdir}/${GL2_FIN3}" "${ipv,,}"
-			[[ "${ipv}" == "IPv4" ]] && sort_opts="--version-sort" || sort_opts=""
+			[[ "${ipv,,}" == "ipv4" ]] && sort_opts="--version-sort" || sort_opts=""
 			if [[ "${OSTYPE}" == "darwin"* || "${OSTYPE}" == "freebsd"* ]]; then
 				grep --no-filename "${country_ids["${country,,}"]}" "${src}" | awk -F ',' '{ print $1 }' | \
 					while read -r cidr; do
@@ -509,17 +510,18 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 	# IPv4 is dominant anyway, version sort is being used; sed command is
 	# used to remove empty and comment lines)
 	print_hilite "Merging GeoLite2 blocklists..."
-	readarray -t src < <(printf "${tmpdir}/${GL2_FOUT1}\n" "${GL2_COUNTRIES[@],,}")
 	dst="${tmpdir}/${GL2_FOUT2}"
-	cat "${src[@]}" | sort --version-sort | uniq > "${dst}"
-	if [[ "${OSTYPE}" == "darwin"* || "${OSTYPE}" == "freebsd"* ]]; then
-		sed -i "" -e '/^$/d' -e '/^#.*$/d' "${dst}"
-	else
-		sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"
+	> "${dst}"
+	if (( ${#countries[@]} > 0 )); then
+		readarray -t src < <(printf "${tmpdir}/${GL2_FOUT1}\n" "${countries[@],,}")
+		cat "${src[@]}" | sort --version-sort | uniq > "${dst}"
+		if [[ "${OSTYPE}" == "darwin"* || "${OSTYPE}" == "freebsd"* ]]; then
+			sed -i "" -e '/^$/d' -e '/^#.*$/d' "${dst}"
+		else
+			sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"
+		fi
 	fi
 
-else
-	touch "${tmpdir}/${GL2_FOUT2}"
 fi
 
 
