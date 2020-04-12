@@ -32,6 +32,11 @@ Open `ipfilter.conf` in your favorite text editor and adjust the settings to you
 
 Refer to embedded comments for details.
 
+## Subscriptions
+Subscriptions are not necessarily required to use the I-Blocklist functionality, as most of the lists provided by *I-Blocklist* are free to download. There are some additional lists that are only available to subscribers, though.
+
+Using the *GeoLite2* functionality requires a subscription, which is free of charge.
+
 ## Usage
 Open a terminal/console running Bash and use the following command to run:
 ```
