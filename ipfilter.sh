@@ -5,7 +5,7 @@
 #  IP Filter Updater & Generator                                          -
 #                                                                         -
 #  Created by Fonic (https://github.com/fonic)                            -
-#  Date: 02/02/20                                                         -
+#  Date: 04/15/19 - 04/16/20                                              -
 #                                                                         -
 # -------------------------------------------------------------------------
 
@@ -39,11 +39,9 @@ SCRIPT_CONFIG="${SCRIPT_DIR}/${SCRIPT_NAME}.conf"
 CMD_NOTIFY=0
 CMD_KEEPTEMP=0
 
-# Wget options
-WGET_OPTS=("--quiet" "--tries=3" "--timeout=15")
-
-# Curl options
-CURL_OPTS=("--location" "--silent" "--show-error" "--retry" "2" "--connect-timeout" "15")
+# Curl / wget options (NOTE: 'curl --retry n-1' equals 'wget --tries=n')
+CURL_OPTS=("--location" "--silent" "--show-error" "--retry" "2" "--connect-timeout" "30")
+WGET_OPTS=("--no-verbose" "--tries=3" "--timeout=30")
 
 # I-BlockList (https://www.iblocklist.com/lists)
 IBL_URL="https://list.iblocklist.com/?list=%s&fileformat=p2p&archiveformat=gz"
@@ -63,9 +61,10 @@ GL2_LICENSE=""
 GL2_COUNTRIES=()
 GL2_IPVERS=("IPv4")
 
-# Final output file, install destination
+# Final output file, install destination, compression type
 FINAL_FILE="ipfilter.p2p"
 INSTALL_DST="${SCRIPT_DIR}/${SCRIPT_NAME}.p2p"
+COMP_TYPE="none"
 
 
 # --------------------------------------
@@ -122,20 +121,20 @@ function is_cmd_avail() {
 
 # Download file [$1: URL, $2: destination path]
 function download_file() {
-	if is_cmd_avail "wget"; then
-		wget "${WGET_OPTS[@]}" "$1" --output-document="$2"
-		return $?
-	elif is_cmd_avail "curl"; then
+	if is_cmd_avail "curl"; then
 		curl "${CURL_OPTS[@]}" "$1" --output "$2"
 		return $?
+	elif is_cmd_avail "wget"; then
+		wget "${WGET_OPTS[@]}" "$1" --output-document="$2"
+		return $?
 	else
-		print_error "Unable to download '$1': neither command 'wget' nor 'curl' is available"
+		print_error "Unable to download '$1': no supported download command available"
 		false
 		return 1
 	fi
 }
 
-# Send desktop notification [$1: type ('info'/'error'), $2: application name, $3: message summary, $4: message body (optional)]
+# Send desktop notification [$1: type ('normal'/'error'), $2: application name, $3: message summary, $4: message body (optional)]
 # NOTE: ${4:-} -> required for optional variable if check for unbound variables is enabled (set -u)
 function notify() {
 	# On macOS, use osascript to send notification
@@ -148,13 +147,8 @@ function notify() {
 	# On Windows, use powershell to send notification
 	# (https://stackoverflow.com/a/45902432)
 	if [[ "${OSTYPE}" == "msys"* ]]; then
-		local icon
-		case "$1" in
-			"error") icon="error"; ;;
-			*)       icon="information"; ;;
-		esac
-		local timeout=10
-		local message
+		local icon message timeout=10
+		[[ "$1" == "error" ]] && icon="error" || icon="information"
 		[[ -z "${4+set}" ]] && message="$3" || message="$3 $4"
 		powershell -c "[reflection.assembly]::loadwithpartialname('System.Windows.Forms'); [reflection.assembly]::loadwithpartialname('System.Drawing'); \$notify = new-object system.windows.forms.notifyicon; \$notify.icon = [System.Drawing.SystemIcons]::${icon}; \$notify.visible = \$true; \$notify.showballoontip(${timeout}, '$2', '${message}', [system.windows.forms.tooltipicon]::None)" &>/dev/null
 		return $?
@@ -162,13 +156,10 @@ function notify() {
 
 	# Translate type to notify-send's urgency
 	local urgency
-	case "$1" in
-		"error") urgency="critical"; ;;
-		*)       urgency="normal"; ;;
-	esac
+	[[ "$1" == "error" ]] && urgency="critical" || urgency="normal"
 
 	# If script is run as root, try to determine user running desktop environment
-	# and try to send notification using su -> https://stackoverflow.com/a/49533938
+	# and try to send notification using su (https://stackoverflow.com/a/49533938)
 	if (( ${EUID} == 0 )); then
 		local display=":$(ls /tmp/.X11-unix/* | sed 's|/tmp/.X11-unix/X||' | head -n 1)"
 		local user="$(who | grep "(${display})" | awk '{ print $1 }' | head -n 1)"
@@ -195,7 +186,7 @@ function notify() {
 # in subshell)
 function error_trap() {
 	print_error "An error occured, aborting." >&2
-	(( ${CMD_NOTIFY} == 1 )) && notify error "${SCRIPT_TITLE}" "An error occurred while updating." "Please check output for errors."
+	(( ${CMD_NOTIFY} == 1 )) && notify "error" "${SCRIPT_TITLE}" "An error occurred while updating." "Please check output for errors."
 	kill -s TERM $$
 	exit 1
 }
@@ -208,7 +199,7 @@ function split_string() {
 	for (( _i=0; _i < ${#_string}; _i++ )); do
 		_char="${_string:_i:1}"
 		if (( ${_escape} == 1 )); then
-			_item="${_item}${_char}"
+			_item+="${_char}"
 			_escape=0
 			continue
 		fi
@@ -221,12 +212,11 @@ function split_string() {
 			continue
 		fi
 		if [[ "${_char}" == "${_sepchr}" ]] && (( ${_quote} == 0 )); then
-			#[[ "${_item}" != "" ]] && _arrref+=("${_item}")
 			_arrref+=("${_item}")
 			_item=""
 			continue
 		fi
-		_item="${_item}${_char}"
+		_item+="${_char}"
 	done
 	[[ "${_item}" != "" ]] && _arrref+=("${_item}")
 }
@@ -298,8 +288,8 @@ function cidr_to_range_ipv6() {
 # --------------------------------------
 
 # Set extended shell options, set error trap (NOTE: elaborate approach to
-# reliably exit even if an error occurs in subshell / process substitution
-# -> https://stackoverflow.com/a/9894126)
+# reliably exit even if an error occurs in subshell / process substitution;
+# https://stackoverflow.com/a/9894126)
 set -eEou pipefail
 trap "exit 1" TERM; trap "error_trap" ERR
 
@@ -313,8 +303,8 @@ print_normal
 print_hilite "--==[ ${SCRIPT_TITLE} ]==--"
 print_normal
 
-# Provide help if requested (NOTE: we do this separately so that help shows
-# up whenever -h/--help is present, even if there are further valid/invalid
+# Provide help if requested (NOTE: do this separately so that help shows up
+# whenever -h/--help is present, even if there are further valid / invalid
 # options present)
 if in_array "-h" "$@" || in_array "--help" "$@"; then
 	print_normal "Usage: $(basename "$0") [OPTIONS]"
@@ -339,47 +329,54 @@ for arg in "$@"; do
 done
 if (( ${invalid} > 0 )); then
 	print_normal
-	print_warn "Invalid command line. Use '--help' to display usage information."
+	print_error "Invalid command line. Use '--help' to display usage information."
 	exit 2
-fi
-
-# Check command availability (NOTE: we do not check for coreutils like cat,
-# sort, ..., we only check for commands that usually have their own package)
-missing=0
-commands=("awk" "grep" "gunzip" "sed" "unzip")
-if (( ${CMD_NOTIFY} == 1 )); then
-	if [[ "${OSTYPE}" == "darwin"* ]]; then
-		commands+=("osascript")
-	elif [[ "${OSTYPE}" == "msys"* ]]; then
-		commands+=("powershell")
-	else
-		commands+=("notify-send")
-	fi
-fi
-for cmd in "${commands[@]}"; do
-	is_cmd_avail "${cmd}" || { print_normal "Command '${cmd}' is not available"; missing=$((missing + 1)); }
-done
-if ! is_cmd_avail "wget" && ! is_cmd_avail "curl"; then
-	print_normal "Neither command 'wget' nor 'curl' is available"
-	missing=$((missing + 1))
-fi
-if (( ${missing} > 0 )); then
-	print_normal
-	print_warn "One or more required commands are unavailable, please check dependencies."
-	exit 1
 fi
 
 # Source configuration file if present
 [[ -e "${SCRIPT_CONFIG}" ]] && source "${SCRIPT_CONFIG}"
 
-# Create temporary folder, set cleanup trap (NOTE: replaces EXIT trap set
-# above for cosmetic reasons)
-print_hilite "Creating temporary folder..."
-if [[ "${OSTYPE}" == "darwin"* || "${OSTYPE}" == "freebsd"* ]]; then
-	tmpdir="$(mktemp -d "/tmp/${SCRIPT_NAME}.XXXXXXXXXX")"
-else
-	tmpdir="$(mktemp --directory --tmpdir=/tmp "${SCRIPT_NAME}.XXXXXXXXXX")"
+# Check command availability (NOTE: do not check for coreutils like cat,
+# sort, ..., only check for commands that usually have their own package)
+missing=0
+commands=("awk" "grep" "gunzip" "sed" "unzip")
+if (( ${CMD_NOTIFY} == 1 )); then
+	case "${OSTYPE}" in
+		"darwin"*) commands+=("osascript"); ;;
+		"msys"*)   commands+=("powershell"); ;;
+		*)         commands+=("notify-send"); ;;
+	esac
 fi
+case "${COMP_TYPE,,}" in
+	"none")  :; ;;
+	"gzip")  commands+=("gzip"); ;;
+	"bzip2") commands+=("bzip2"); ;;
+	"zip")   commands+=("zip"); ;;
+	*)
+		print_error "Invalid compression type '${COMP_TYPE}', please check configuration."
+		exit 1
+		;;
+esac
+for cmd in "${commands[@]}"; do
+	if ! is_cmd_avail "${cmd}"; then
+		print_normal "Command '${cmd}' is not available"
+		missing=$((missing + 1))
+	fi
+done
+if ! is_cmd_avail "curl" && ! is_cmd_avail "wget"; then
+	print_normal "Neither command 'curl' nor 'wget' is available"
+	missing=$((missing + 1))
+fi
+if (( ${missing} > 0 )); then
+	print_normal
+	print_error "One or more required commands are unavailable, please check dependencies."
+	exit 1
+fi
+
+# Create temporary folder, set cleanup trap (NOTE: replaces EXIT trap set
+# above for cosmetic reasons; mktemp call simplified for multi-platform use)
+print_hilite "Creating temporary folder..."
+tmpdir="$(mktemp -d "/tmp/${SCRIPT_NAME}.XXXXXXXXXX")"
 if (( ${CMD_KEEPTEMP} == 0 )); then
 	trap "print_hilite \"Removing temporary folder...\"; rm -rf \"${tmpdir}\"; print_normal" EXIT
 else
@@ -415,7 +412,7 @@ if (( ${#IBL_LISTS[@]} > 0 )); then
 	done
 
 	# Merge blocklists (NOTE: version sort works well for IPv4; for IPv6,
-	# alphanumerical sort is required; since we have to sort for uniq and
+	# alphanumerical sort is required; since sort is required for uniq and
 	# IPv4 is dominant anyway, version sort is being used; sed command is
 	# used to remove empty and comment lines)
 	print_hilite "Merging I-BlockList blocklists..."
@@ -446,12 +443,13 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 	dst="${tmpdir}/${GL2_FIN1}"
 	download_file "${src}" "${dst}"
 
-	# Extract database
+	# Extract database (NOTE: on Windows, unzip '*.csv' does not work while
+	# unzip '**.csv' does; no idea why exactly, but it works, so let it be)
 	print_hilite "Extracting GeoLite2 database..."
 	src="${tmpdir}/${GL2_FIN1}"
 	dst="${tmpdir}"
 	if [[ "${OSTYPE}" == "msys"* ]]; then
-		unzip -q -o -j -LL "${src}" -d "${dst}"
+		unzip -q -o -j -LL "${src}" '**.csv' -d "${dst}"
 	else
 		unzip -q -o -j -LL "${src}" '*.csv' -d "${dst}"
 	fi
@@ -476,7 +474,7 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 	done < <(tail -q -n +2 "${src}")
 
 	# Parse country blocks, generate country blocklists (NOTE: most, probably
-	# only performance-critical part of script)
+	# only performance-critical part of script; awk -F for multi-platform use)
 	print_hilite "Generating GeoLite2 blocklists..."
 	countries=()
 	for country in "${GL2_COUNTRIES[@]}"; do
@@ -489,24 +487,16 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 			[[ "${ipv,,}" != "ipv4" && "${ipv,,}" != "ipv6" ]] && { print_warn "Skipping invalid IP version '${ipv}' in setting GL2_IPVERS"; continue; }
 			printf -v src "${tmpdir}/${GL2_FIN3}" "${ipv,,}"
 			[[ "${ipv,,}" == "ipv4" ]] && sort_opts="--version-sort" || sort_opts=""
-			if [[ "${OSTYPE}" == "darwin"* || "${OSTYPE}" == "freebsd"* ]]; then
-				grep --no-filename "${country_ids["${country,,}"]}" "${src}" | awk -F ',' '{ print $1 }' | \
-					while read -r cidr; do
-						cidr_to_range_${ipv,,} "${cidr}" sips eips
-						printf "GeoLite2 %s %s:%s-%s\n" "${country}" "${ipv}" "${sips}" "${eips}"
-					done | sort ${sort_opts} | uniq >> "${dst}"
-			else
-				grep --no-filename "${country_ids["${country,,}"]}" "${src}" | awk --field-separator ',' '{ print $1 }' | \
-					while read -r cidr; do
-						cidr_to_range_${ipv,,} "${cidr}" sips eips
-						printf "GeoLite2 %s %s:%s-%s\n" "${country}" "${ipv}" "${sips}" "${eips}"
-					done | sort ${sort_opts} | uniq >> "${dst}"
-			fi
+			grep --no-filename "${country_ids["${country,,}"]}" "${src}" | awk -F ',' '{ print $1 }' | \
+				while read -r cidr; do
+					cidr_to_range_${ipv,,} "${cidr}" sips eips
+					printf "GeoLite2 %s %s:%s-%s\n" "${country}" "${ipv}" "${sips}" "${eips}"
+				done | sort ${sort_opts} | uniq >> "${dst}"
 		done
 	done
 
 	# Merge blocklists (NOTE: version sort works well for IPv4; for IPv6,
-	# alphanumerical sort is required; since we have to sort for uniq and
+	# alphanumerical sort is required; since sort is required for uniq and
 	# IPv4 is dominant anyway, version sort is being used; sed command is
 	# used to remove empty and comment lines)
 	print_hilite "Merging GeoLite2 blocklists..."
@@ -537,12 +527,24 @@ readarray -t src < <(printf "${tmpdir}/%s\n" "${IBL_FOUT}" "${GL2_FOUT2}")
 dst="${tmpdir}/${FINAL_FILE}"
 cat "${src[@]}" > "${dst}"
 
-# Install final IP filter blocklist
-print_hilite "Installing final IP filter blocklist..."
+# Install final file to specified destination
+print_hilite "Installing final IP filter file..."
 src="${tmpdir}/${FINAL_FILE}"
 dst="${INSTALL_DST}"
 cp "${src}" "${dst}"
 
-# Return home safely
-(( ${CMD_NOTIFY} == 1 )) && notify info "${SCRIPT_TITLE}" "IP filter successfully updated."
+# Compress installed file in-place
+if [[ "${COMP_TYPE,,}" != "none" ]]; then
+	print_hilite "Compressing installed file in-place..."
+	src="${INSTALL_DST}"
+	case "${COMP_TYPE,,}" in
+		"gzip")  gzip "${src}"; ;;
+		"bzip2") bzip2 "${src}"; ;;
+		"zip")   dst="${src%.*}.zip"; zip -q -j "${dst}" "${src}"; rm "${src}"; ;;
+	esac
+fi
+
+# Update successfully completed
+print_good "IP filter successfully updated."
+(( ${CMD_NOTIFY} == 1 )) && notify "normal" "${SCRIPT_TITLE}" "IP filter successfully updated."
 exit 0
