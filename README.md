@@ -14,15 +14,10 @@ _Bash >= 4.0_, _awk_, _grep_, _gunzip_, _sed_, _unzip_, _wget_ -or- _curl_, _not
 
 macOS users might want to use [Homebrew](https://brew.sh/) to install missing dependencies.
 
-Windows users might want to use [Git for Windows](https://git-scm.com/download/win) as a runtime environment, as it is reasonably lightweight and meets all requirements out of the box.
+Windows users might want to use [Git for Windows](https://git-scm.com/download/win) as a runtime environment. It is reasonably lightweight, features up-to-date GNU utitilies and meets all requirements out of the box.
 
 ## Download
-Either use this [download link](https://github.com/fonic/ipfilter/archive/master.zip) or one of the following commands:
-```
-# git clone https://github.com/fonic/ipfilter.git ipfilter
-# wget https://github.com/fonic/ipfilter/archive/master.zip -O ipfilter.zip
-# curl -L https://github.com/fonic/ipfilter/archive/master.zip -o ipfilter.zip
-```
+Refer to the [releases](https://github.com/fonic/ipfilter/releases) section for downloads links.
 
 ## Installation
 There is no installation required. Simply extract the downloaded archive to a folder of your choice.
@@ -33,9 +28,9 @@ Open `ipfilter.conf` in your favorite text editor and adjust the settings to you
 Refer to embedded comments for details.
 
 ## Subscriptions
-Subscriptions are not necessarily required to use the I-Blocklist functionality, as most of the lists provided by *I-Blocklist* are free to download. There are some additional lists that are only available to subscribers, though.
+Subscriptions are not required to use the *I-Blocklist* functionality, as most of the lists provided by *I-Blocklist* are free to download. There are some additional lists that are only available to subscribers, though.
 
-Using the *GeoLite2* functionality requires a subscription, which is free of charge.
+Using the *GeoLite2* functionality requires a subscription due to [recent changes](https://blog.maxmind.com/2019/12/18/significant-changes-to-accessing-and-using-geolite2-databases/), which is free of charge.
 
 ## Usage
 Open a terminal/console running Bash and use the following command to run:
