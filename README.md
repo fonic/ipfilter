@@ -6,14 +6,14 @@ Operating System:<br/>
 _Linux_, _FreeBSD_, _macOS_ or _Windows_.
 
 Tools & Utilities:<br/>
-_Bash >= 4.0_, _awk_, _grep_, _gunzip_, _sed_, _unzip_, _curl_/_wget_, _gzip_/_bzip2_/_zip_<sup>[(1)](#footnote1)</sup>, _notify-send_/_osascript_/_powershell_<sup>[(2)](#footnote2)</sup>.
+_Bash >= 4.0_, _awk_, _grep_, _gunzip_, _sed_, _unzip_, _curl_ / _wget_, _gzip_ / _bzip2_ / _zip_<sup>[(1)](#footnote1)</sup>, _notify-send_ / _osascript_ / _powershell_<sup>[(2)](#footnote2)</sup>.
 
-<sup><a name="footnote1">(1)</a></sup> optional, required for _gzip_/_bzip2_/_zip_ compression of output file if enabled<br/>
+<sup><a name="footnote1">(1)</a></sup> optional, required for _gzip_ / _bzip2_ / _zip_ compression of output file if enabled<br/>
 <sup><a name="footnote2">(2)</a></sup> optional, required for option `-n/--notify` on _Linux_/_FreeBSD_ / _macOS_ / _Windows_<br/>
 
 macOS users might want to use [Homebrew](https://brew.sh/) to install missing dependencies.
 
-Windows users might want to use [Git for Windows](https://git-scm.com/download/win) as a runtime environment. It is reasonably lightweight, features up-to-date GNU utitilies and meets all requirements out of the box.
+Windows users might want to use [Git for Windows](https://git-scm.com/download/win) as a runtime environment. It is reasonably lightweight, features up-to-date GNU utitilies and meets all requirements out of the box. A portable version is available, too.
 
 ## Download
 Refer to the [releases](https://github.com/fonic/ipfilter/releases) section for downloads links.
@@ -22,7 +22,7 @@ Refer to the [releases](https://github.com/fonic/ipfilter/releases) section for 
 There is no installation required. Simply extract the downloaded archive to a folder of your choice.
 
 ## Configuration
-Open `ipfilter.conf` in your favorite text editor and adjust the settings to your liking.
+Open `ipfilter.conf` in your favorite text editor and adjust the settings to your liking. Before changing settings, you might want to run the script with default settings to make sure it works as expected.
 
 Refer to embedded comments for details.
 

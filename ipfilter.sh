@@ -5,7 +5,7 @@
 #  IP Filter Updater & Generator                                          -
 #                                                                         -
 #  Created by Fonic (https://github.com/fonic)                            -
-#  Date: 04/15/19 - 04/16/20                                              -
+#  Date: 04/15/19 - 04/20/20                                              -
 #                                                                         -
 # -------------------------------------------------------------------------
 
@@ -474,7 +474,8 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 	done < <(tail -q -n +2 "${src}")
 
 	# Parse country blocks, generate country blocklists (NOTE: most, probably
-	# only performance-critical part of script; awk -F for multi-platform use)
+	# only performance-critical part of script; awk call simplified for multi-
+	# platform use)
 	print_hilite "Generating GeoLite2 blocklists..."
 	countries=()
 	for country in "${GL2_COUNTRIES[@]}"; do
