@@ -5,7 +5,7 @@
 #  IP Filter Updater & Generator                                          -
 #                                                                         -
 #  Created by Fonic (https://github.com/fonic)                            -
-#  Date: 04/15/19 - 04/20/20                                              -
+#  Date: 04/15/19 - 05/11/20                                              -
 #                                                                         -
 # -------------------------------------------------------------------------
 
@@ -15,7 +15,8 @@
 #                                      -
 # --------------------------------------
 
-# Check Bash version
+# Check if running Bash and required version (NOTE: check does not rely on
+# any Bashism to make sure it's guaranteed to work on all shells)
 if [ -z "${BASH_VERSION}" ] || [ "${BASH_VERSION%%.*}" -lt 4 ]; then
 	echo "This script requires Bash >= 4.0 to run."
 	exit 1
@@ -28,10 +29,23 @@ fi
 #                                      -
 # --------------------------------------
 
-# Script
+# Script data (NOTE: handle special case for SCRIPT_DIR to fix issue #5;
+# running the script from '/' results in SCRIPT_CONFIG='//ipfilter.conf',
+# which is a valid path on all OSes / runtime environments except Git for
+# Windows; same for INSTALL_DST below; macOS has no 'realpath' and there's
+# no simple workaround for that, so just don't support/use it)
 SCRIPT_TITLE="IP Filter Updater & Generator"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SCRIPT_FILE="$(basename "$0")"
+if [[ "${OSTYPE,,}" == "darwin"* ]]; then
+	SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+else
+	SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+fi
+[[ "${SCRIPT_DIR}" == "/" ]] && SCRIPT_DIR=""
+if [[ "${OSTYPE,,}" == "darwin"* ]]; then
+	SCRIPT_FILE="$(basename "$0")"
+else
+	SCRIPT_FILE="$(basename "$(realpath "$0")")"
+fi
 SCRIPT_NAME="${SCRIPT_FILE%.*}"
 SCRIPT_CONFIG="${SCRIPT_DIR}/${SCRIPT_NAME}.conf"
 
@@ -119,6 +133,14 @@ function is_cmd_avail() {
 	return $?
 }
 
+# Check if operating system is Linux on WSL [no arguments]
+# (https://github.com/microsoft/WSL/issues/423, https://github.com/microsoft/WSL/issues/844)
+function is_linux_on_wsl() {
+	local uname="$(uname -r)"
+	[[ "${OSTYPE,,}" == "linux"* && "${uname,,}" == *"microsoft"* ]] && return 0
+	return 1
+}
+
 # Download file [$1: URL, $2: destination path]
 function download_file() {
 	if is_cmd_avail "curl"; then
@@ -128,56 +150,78 @@ function download_file() {
 		wget "${WGET_OPTS[@]}" "$1" --output-document="$2"
 		return $?
 	else
-		print_error "Unable to download '$1': no supported download command available"
-		false
+		print_error "Unable to download '$1': no download command available"
 		return 1
 	fi
 }
 
 # Send desktop notification [$1: type ('normal'/'error'), $2: application name, $3: message summary, $4: message body (optional)]
-# NOTE: ${4:-} -> required for optional variable if check for unbound variables is enabled (set -u)
+# NOTE: '${4:-}'/'${DISPLAY:-}' is required to not throw errors if 'treat unset variables as errors' (set -u) is enabled
 function notify() {
-	# On macOS, use osascript to send notification
+
+	# Linux/FreeBSD: use notify-send to send notification
+	# (NOTE: Only applies to native Linux; Linux on WSL is handled below instead)
+	if ( [[ "${OSTYPE,,}" == "linux"* ]] && ! is_linux_on_wsl ) || [[ "${OSTYPE,,}" == "freebsd"* ]]; then
+		if ! is_cmd_avail "notify-send"; then
+			print_error "Unable to send notification: command 'notify-send' not available"
+			return 1
+		fi
+
+		# Translate type to notify-send's urgency
+		local urgency
+		[[ "$1" == "error" ]] && urgency="critical" || urgency="normal"
+
+		# If script is run as root, try to determine user running desktop environment
+		# and try to send notification using su (https://stackoverflow.com/a/49533938)
+		if (( ${EUID} == 0 )); then
+			local display=":$(ls /tmp/.X11-unix/* | sed 's|/tmp/.X11-unix/X||' | head -n 1)"
+			local user="$(who | grep "(${display})" | awk '{ print $1 }' | head -n 1)"
+			su "${user}" -c "DISPLAY=\"${display}\" notify-send --urgency=\"${urgency}\" --app-name=\"$2\" \"$3\" \"${4:-}\""
+			return $?
+		fi
+
+		# If DISPLAY variable is not set or empty, try to determine its value and try
+		# to send notification to that display (probably only works for the same user)
+		if [[ -z "${DISPLAY:-}" ]]; then
+			local display=":$(ls /tmp/.X11-unix/* | sed 's|/tmp/.X11-unix/X||' | head -n 1)"
+			DISPLAY="${display}" notify-send --urgency="${urgency}" --app-name="$2" "$3" "${4:-}"
+			return $?
+		fi
+
+		# Send notification normally
+		notify-send --urgency="${urgency}" --app-name="$2" "$3" "${4:-}"
+		return $?
+	fi
+
+	# macOS: use osascript to send notification
 	# (https://code-maven.com/display-notification-from-the-mac-command-line)
-	if [[ "${OSTYPE}" == "darwin"* ]]; then
+	if [[ "${OSTYPE,,}" == "darwin"* ]]; then
+		if ! is_cmd_avail "osascript"; then
+			print_error "Unable to send notification: command 'osascript' not available"
+			return 1
+		fi
 		osascript -e "display notification \"${4:-}\" with title \"$2\" subtitle \"$3\""
 		return $?
 	fi
 
-	# On Windows, use powershell to send notification
+	# Windows and Linux on WSL: use powershell to send notification
 	# (https://stackoverflow.com/a/45902432)
-	if [[ "${OSTYPE}" == "msys"* ]]; then
+	if [[ "${OSTYPE,,}" == "msys"* || "${OSTYPE,,}" == "cygwin"* ]] || is_linux_on_wsl; then
+		if ! is_cmd_avail "powershell.exe"; then
+			print_error "Unable to send notification: command 'powershell.exe' not available"
+			return 1
+		fi
 		local icon message timeout=10
 		[[ "$1" == "error" ]] && icon="error" || icon="information"
 		[[ -z "${4+set}" ]] && message="$3" || message="$3 $4"
-		powershell -c "[reflection.assembly]::loadwithpartialname('System.Windows.Forms'); [reflection.assembly]::loadwithpartialname('System.Drawing'); \$notify = new-object system.windows.forms.notifyicon; \$notify.icon = [System.Drawing.SystemIcons]::${icon}; \$notify.visible = \$true; \$notify.showballoontip(${timeout}, '$2', '${message}', [system.windows.forms.tooltipicon]::None)" &>/dev/null
+		powershell.exe -c "[reflection.assembly]::loadwithpartialname('System.Windows.Forms'); [reflection.assembly]::loadwithpartialname('System.Drawing'); \$notify = new-object system.windows.forms.notifyicon; \$notify.icon = [System.Drawing.SystemIcons]::${icon}; \$notify.visible = \$true; \$notify.showballoontip(${timeout}, '$2', '${message}', [system.windows.forms.tooltipicon]::None)" &>/dev/null
 		return $?
 	fi
 
-	# Translate type to notify-send's urgency
-	local urgency
-	[[ "$1" == "error" ]] && urgency="critical" || urgency="normal"
+	# Operating system type not supported
+	print_error "Unable to send notification: operating system type '${OSTYPE}' not supported"
+	return 1
 
-	# If script is run as root, try to determine user running desktop environment
-	# and try to send notification using su (https://stackoverflow.com/a/49533938)
-	if (( ${EUID} == 0 )); then
-		local display=":$(ls /tmp/.X11-unix/* | sed 's|/tmp/.X11-unix/X||' | head -n 1)"
-		local user="$(who | grep "(${display})" | awk '{ print $1 }' | head -n 1)"
-		su "${user}" -c "DISPLAY=\"${display}\" notify-send --urgency=\"${urgency}\" --app-name=\"$2\" \"$3\" \"${4:-}\""
-		return $?
-	fi
-
-	# If DISPLAY variable is not set or empty, try to determine its value and try
-	# to send notification to that display (probably only works for the same user)
-	if [[ -z "${DISPLAY:-}" ]]; then
-		local display=":$(ls /tmp/.X11-unix/* | sed 's|/tmp/.X11-unix/X||' | head -n 1)"
-		DISPLAY="${display}" notify-send --urgency="${urgency}" --app-name="$2" "$3" "${4:-}"
-		return $?
-	fi
-
-	# Send notification normally
-	notify-send --urgency="${urgency}" --app-name="$2" "$3" "${4:-}"
-	return $?
 }
 
 # Handler for error trap [no arguments] (NOTE: redirection to stderr is
@@ -287,10 +331,12 @@ function cidr_to_range_ipv6() {
 #                                      -
 # --------------------------------------
 
-# Set extended shell options, set error trap (NOTE: elaborate approach to
-# reliably exit even if an error occurs in subshell / process substitution;
-# https://stackoverflow.com/a/9894126)
-set -eEou pipefail
+# Setup error handling (NOTE: elaborate approach to reliably handle errors
+# occurring in subshells / process substitutions; set: '-e' exit on error,
+# '-u' treat unset variables as errors, '-E' subshells / process substitutions
+# inherit error trap of parent, '-o pipefail' return value of pipeline is
+# return value of last command; see https://stackoverflow.com/a/9894126)
+set -euE -o pipefail
 trap "exit 1" TERM; trap "error_trap" ERR
 
 # Set cosmetic traps
@@ -310,11 +356,11 @@ if in_array "-h" "$@" || in_array "--help" "$@"; then
 	print_normal "Usage: $(basename "$0") [OPTIONS]"
 	print_normal
 	print_normal "Options:"
-	print_normal "  -n, --notify               Send desktop notification when done"
-	print_normal "                             or an error occurred (for cron use)"
-	print_normal "  -k, --keep-temp            Do not remove temporary folder when"
-	print_normal "                             done (useful for debugging)"
-	print_normal "  -h, --help                 Display this help message"
+	print_normal "  -n, --notify       Send desktop notification to inform user"
+	print_normal "                     about success/failure (useful for cron)"
+	print_normal "  -k, --keep-temp    Do not remove temporary folder when done"
+	print_normal "                     (useful for debugging)"
+	print_normal "  -h, --help         Display this help message"
 	exit 0
 fi
 
@@ -324,7 +370,7 @@ for arg in "$@"; do
 	case "${arg}" in
 		"-n"|"--notify")    CMD_NOTIFY=1; ;;
 		"-k"|"--keep-temp") CMD_KEEPTEMP=1; ;;
-		*)                  print_normal "Invalid option '${arg}'"; invalid=$((invalid + 1)); ;;
+		*)                  print_error "Invalid option '${arg}'"; invalid=$((invalid + 1)); ;;
 	esac
 done
 if (( ${invalid} > 0 )); then
@@ -333,18 +379,43 @@ if (( ${invalid} > 0 )); then
 	exit 2
 fi
 
-# Source configuration file if present
-[[ -e "${SCRIPT_CONFIG}" ]] && source "${SCRIPT_CONFIG}"
+# Check and source configuration file
+if [[ ! -f "${SCRIPT_CONFIG}" ]]; then
+	print_error "Configuration file '${SCRIPT_CONFIG}' does not exist, aborting."
+	exit 1
+fi
+if ! source "${SCRIPT_CONFIG}"; then
+	print_error "Failed to read configuration file '${SCRIPT_CONFIG}', aborting."
+	exit 1
+fi
 
 # Check command availability (NOTE: do not check for coreutils like cat,
 # sort, ..., only check for commands that usually have their own package)
 missing=0
 commands=("awk" "grep" "gunzip" "sed" "unzip")
 if (( ${CMD_NOTIFY} == 1 )); then
-	case "${OSTYPE}" in
-		"darwin"*) commands+=("osascript"); ;;
-		"msys"*)   commands+=("powershell"); ;;
-		*)         commands+=("notify-send"); ;;
+	case "${OSTYPE,,}" in
+		"linux"*)
+			# Require 'powershell.exe' for Linux on WSL and 'notify-send' for native Linux
+			# (NOTE: this has to be 'powershell.exe', just 'powershell' won't work)
+			if is_linux_on_wsl; then
+				commands+=("powershell.exe")
+			else
+				commands+=("notify-send")
+			fi
+			;;
+		"freebsd"*)
+			commands+=("notify-send"); ;;
+		"darwin"*)
+			commands+=("osascript"); ;;
+		"msys"*|"cygwin"*)
+			# NOTE: although just 'powershell' works fine on Cygwin/MSYS2/PortableGit,
+			# 'powershell.exe' is more precise
+			commands+=("powershell.exe"); ;;
+		*)
+			print_error "Option '-n/--notify' not supported on operating system type '${OSTYPE}', aborting."
+			exit 1
+			;;
 	esac
 fi
 case "${COMP_TYPE,,}" in
@@ -359,12 +430,12 @@ case "${COMP_TYPE,,}" in
 esac
 for cmd in "${commands[@]}"; do
 	if ! is_cmd_avail "${cmd}"; then
-		print_normal "Command '${cmd}' is not available"
+		print_error "Command '${cmd}' is not available"
 		missing=$((missing + 1))
 	fi
 done
 if ! is_cmd_avail "curl" && ! is_cmd_avail "wget"; then
-	print_normal "Neither command 'curl' nor 'wget' is available"
+	print_error "Neither command 'curl' nor 'wget' is available"
 	missing=$((missing + 1))
 fi
 if (( ${missing} > 0 )); then
@@ -373,8 +444,8 @@ if (( ${missing} > 0 )); then
 	exit 1
 fi
 
-# Create temporary folder, set cleanup trap (NOTE: replaces EXIT trap set
-# above for cosmetic reasons; mktemp call simplified for multi-platform use)
+# Create temporary folder, set cleanup trap (NOTE: replaces initially set
+# cosmetic exit trap; mktemp call simplified for multi-platform use)
 print_hilite "Creating temporary folder..."
 tmpdir="$(mktemp -d "/tmp/${SCRIPT_NAME}.XXXXXXXXXX")"
 if (( ${CMD_KEEPTEMP} == 0 )); then
@@ -419,7 +490,7 @@ if (( ${#IBL_LISTS[@]} > 0 )); then
 	readarray -t src < <(printf "${tmpdir}/${IBL_FIN2}\n" "${!IBL_LISTS[@]}")
 	dst="${tmpdir}/${IBL_FOUT}"
 	cat "${src[@]}" | sort --version-sort | uniq > "${dst}"
-	if [[ "${OSTYPE}" == "darwin"* || "${OSTYPE}" == "freebsd"* ]]; then
+	if [[ "${OSTYPE,,}" == "darwin"* || "${OSTYPE,,}" == "freebsd"* ]]; then
 		sed -i "" -e '/^$/d' -e '/^#.*$/d' "${dst}"
 	else
 		sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"
@@ -448,7 +519,7 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 	print_hilite "Extracting GeoLite2 database..."
 	src="${tmpdir}/${GL2_FIN1}"
 	dst="${tmpdir}"
-	if [[ "${OSTYPE}" == "msys"* ]]; then
+	if [[ "${OSTYPE,,}" == "msys"* || "${OSTYPE,,}" == "cygwin"* ]]; then
 		unzip -q -o -j -LL "${src}" '**.csv' -d "${dst}"
 	else
 		unzip -q -o -j -LL "${src}" '*.csv' -d "${dst}"
@@ -506,7 +577,7 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 	if (( ${#countries[@]} > 0 )); then
 		readarray -t src < <(printf "${tmpdir}/${GL2_FOUT1}\n" "${countries[@],,}")
 		cat "${src[@]}" | sort --version-sort | uniq > "${dst}"
-		if [[ "${OSTYPE}" == "darwin"* || "${OSTYPE}" == "freebsd"* ]]; then
+		if [[ "${OSTYPE,,}" == "darwin"* || "${OSTYPE,,}" == "freebsd"* ]]; then
 			sed -i "" -e '/^$/d' -e '/^#.*$/d' "${dst}"
 		else
 			sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"
@@ -528,7 +599,7 @@ readarray -t src < <(printf "${tmpdir}/%s\n" "${IBL_FOUT}" "${GL2_FOUT2}")
 dst="${tmpdir}/${FINAL_FILE}"
 cat "${src[@]}" > "${dst}"
 
-# Install final file to specified destination
+# Install final output file to specified destination
 print_hilite "Installing final IP filter file..."
 src="${tmpdir}/${FINAL_FILE}"
 dst="${INSTALL_DST}"
