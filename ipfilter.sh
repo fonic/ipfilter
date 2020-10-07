@@ -5,7 +5,7 @@
 #  IP Filter Updater & Generator                                          -
 #                                                                         -
 #  Created by Fonic (https://github.com/fonic)                            -
-#  Date: 04/15/19 - 05/11/20                                              -
+#  Date: 04/15/19 - 10/07/20                                              -
 #                                                                         -
 # -------------------------------------------------------------------------
 
@@ -422,6 +422,7 @@ case "${COMP_TYPE,,}" in
 	"none")  :; ;;
 	"gzip")  commands+=("gzip"); ;;
 	"bzip2") commands+=("bzip2"); ;;
+	"xz")    commands+=("xz"); ;;
 	"zip")   commands+=("zip"); ;;
 	*)
 		print_error "Invalid compression type '${COMP_TYPE}', please check configuration."
@@ -605,15 +606,21 @@ src="${tmpdir}/${FINAL_FILE}"
 dst="${INSTALL_DST}"
 cp "${src}" "${dst}"
 
-# Compress installed file in-place
+# Compress installed file in-place (NOTE: using '<cmd> -c "${src}" > "${dst}"'
+# for gzip/bzip2/xz to overwrite existing destination file without having to
+# use option '--force' which has other, potentially undesired side effects; zip
+# by default updates existing archives, thus using output to stdout + redirect
+# to create a fresh archive each time)
 if [[ "${COMP_TYPE,,}" != "none" ]]; then
 	print_hilite "Compressing installed file in-place..."
 	src="${INSTALL_DST}"
 	case "${COMP_TYPE,,}" in
-		"gzip")  gzip "${src}"; ;;
-		"bzip2") bzip2 "${src}"; ;;
-		"zip")   dst="${src%.*}.zip"; zip -q -j "${dst}" "${src}"; rm "${src}"; ;;
+		"gzip")  dst="${src}.gz"; gzip -c "${src}" > "${dst}"; ;;
+		"bzip2") dst="${src}.bz2"; bzip2 -c "${src}" > "${dst}"; ;;
+		"xz")    dst="${src}.xz"; xz -c "${src}" > "${dst}"; ;;
+		"zip")   dst="${src%.*}.zip"; zip -q -j - "${src}" > "${dst}"; ;;
 	esac
+	rm "${src}"
 fi
 
 # Update successfully completed
