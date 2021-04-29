@@ -13,7 +13,7 @@ _Bash >= 4.0_, _awk_, _grep_, _gunzip_, _sed_, _unzip_, _curl_ / _wget_, _gzip_ 
 
 macOS users might want to use [Homebrew](https://brew.sh/) to install missing dependencies.
 
-Windows users need to setup a runtime environment. [Cygwin](https://www.cygwin.com/), [MSYS2](https://www.msys2.org/), [Git for Windows](https://git-scm.com/download/win) and [Windows Subsystem for Linux](https://docs.microsoft.com/en-us/windows/wsl/install-win10) should all work fine. _Git for Windows_ might be a good choice to get started - it is reasonably lightweight, easy to set up, meets all requirements out of the box and is also available as a portable version.
+Windows users need to setup a runtime environment. [Cygwin](https://www.cygwin.com/), [MSYS2](https://www.msys2.org/), [Git for Windows](https://git-scm.com/download/win) and [Windows Subsystem for Linux](https://docs.microsoft.com/en-us/windows/wsl/install-win10) should all work fine. _Git for Windows_ might be a good choice to get started - it is reasonably lightweight, easy to set up, meets all requirements out of the box and is also available as a portable version. See [Windows Runtime Environments](https://github.com/fonic/ipfilter/blob/master/documents/Windows%20Runtime%20Environments.md) for additional information.
 
 ## Download
 Refer to the [releases](https://github.com/fonic/ipfilter/releases) section for downloads links.
@@ -27,19 +27,19 @@ Open `ipfilter.conf` in your favorite text editor and adjust the settings to you
 ## Subscriptions
 Subscriptions are not required to use the _I-Blocklist_ functionality, as most of the lists provided by _I-Blocklist_ are free to download. There are some additional lists that are only available to subscribers, though.
 
-Using the _GeoLite2_ functionality requires a subscription due to [recent changes](https://blog.maxmind.com/2019/12/18/significant-changes-to-accessing-and-using-geolite2-databases/), which is free of charge.
+Using the _GeoLite2_ functionality requires a license key which can be obtained free of charge after [registering](https://www.maxmind.com/en/geolite2/signup) (refer to [this blog post](https://blog.maxmind.com/2019/12/18/significant-changes-to-accessing-and-using-geolite2-databases/) for details).
 
 ## Usage
-Open a terminal/console running Bash and run the script using the following command(s):
+Open a terminal/console running Bash and run the script using the following commands:
 ```
-$ <path-to-script>/ipfilter.sh
--or-
 $ cd <path-to-script>
 $ ./ipfilter.sh
 ```
 
-Note that root privileges should not be required. Just make sure the configured `INSTALL_DST` points to a location writeable by the user running the script.
+Note that root privileges should not be required. Just make sure the configured `INSTALL_DST` points to a location writeable by the user running the script. The same applies to `LOG_FILE` if logging is enabled.
 
-For running non-interactively (e.g. via cron), you might want to add option `-n/--notify` to send desktop notifications informing you about success/failure.
+For running non-interactively (e.g. via cron), you might want to enable logging and/or use option `-n/--notify` to send desktop notifications informing you about success/failure.
 
 Use option `-h/--help` to display available command line options.
+
+<br/>_Last updated: 04/28/21_

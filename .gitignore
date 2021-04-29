@@ -1,3 +1,7 @@
-*.p2p
-*.p2p.*
-*.zip
+# Prevent accidental upload of files created by script
+sources/*.log
+sources/*.p2p
+sources/*.gz
+sources/*.bz2
+sources/*.xz
+sources/*.zip

@@ -5,7 +5,7 @@
 #  IP Filter Updater & Generator                                          -
 #                                                                         -
 #  Created by Fonic (https://github.com/fonic)                            -
-#  Date: 04/15/19 - 10/07/20                                              -
+#  Date: 04/15/19 - 04/28/21                                              -
 #                                                                         -
 # -------------------------------------------------------------------------
 
@@ -15,8 +15,8 @@
 #                                      -
 # --------------------------------------
 
-# Check if running Bash and required version (NOTE: check does not rely on
-# any Bashism to make sure it's guaranteed to work on all shells)
+# Check if running Bash and required version (NOTE: this check does not rely
+# on any Bashism to make sure it's guaranteed to work on any POSIX shell)
 if [ -z "${BASH_VERSION}" ] || [ "${BASH_VERSION%%.*}" -lt 4 ]; then
 	echo "This script requires Bash >= 4.0 to run."
 	exit 1
@@ -29,19 +29,31 @@ fi
 #                                      -
 # --------------------------------------
 
-# Script data (NOTE: handle special case for SCRIPT_DIR to fix issue #5;
+# Determine platform / OS type (NOTE: this info is used a lot throughout the
+# script, thus it makes sense to preprocess/normalize it here to simplify ifs
+# down the road; https://github.com/microsoft/WSL/issues/423)
+case "${OSTYPE,,}" in
+	"linux"*) uname="$(uname -r)"; [[ "${uname,,}" == *"microsoft"* ]] && PLATFORM="linux-wsl" || PLATFORM="linux"; ;;
+	"darwin"*) PLATFORM="macos"; ;;
+	"freebsd"*) PLATFORM="freebsd"; ;;
+	"msys"*) PLATFORM="windows-msys"; ;;
+	"cygwin"*) PLATFORM="windows-cygwin"; ;;
+	*) PLATFORM="${OSTYPE,,}"
+esac
+
+# Script info (NOTE: handle special case for SCRIPT_DIR to fix issue #5;
 # running the script from '/' results in SCRIPT_CONFIG='//ipfilter.conf',
 # which is a valid path on all OSes / runtime environments except Git for
 # Windows; same for INSTALL_DST below; macOS has no 'realpath' and there's
 # no simple workaround for that, so just don't support/use it)
 SCRIPT_TITLE="IP Filter Updater & Generator"
-if [[ "${OSTYPE,,}" == "darwin"* ]]; then
+if [[ "${PLATFORM}" == "macos" ]]; then
 	SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 else
 	SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 fi
 [[ "${SCRIPT_DIR}" == "/" ]] && SCRIPT_DIR=""
-if [[ "${OSTYPE,,}" == "darwin"* ]]; then
+if [[ "${PLATFORM}" == "macos" ]]; then
 	SCRIPT_FILE="$(basename "$0")"
 else
 	SCRIPT_FILE="$(basename "$(realpath "$0")")"
@@ -49,22 +61,36 @@ fi
 SCRIPT_NAME="${SCRIPT_FILE%.*}"
 SCRIPT_CONFIG="${SCRIPT_DIR}/${SCRIPT_NAME}.conf"
 
-# Command line options
-CMD_NOTIFY=0
-CMD_KEEPTEMP=0
+# Notification settings
+NOTIFY_USER="false"
+
+# Temporary directory (NOTE: TEMP_DIR needs to be global to be accessible
+# for exit trap handler; value is set using mktemp during initialization)
+TEMP_DIR=""
+KEEP_TEMP="false"
+
+# Verbose output
+VERBOSE_OUTPUT="false"
+
+# Logging settings
+LOG_STARTED="$(date)"
+LOG_TEMP="ipfilter.log"
+LOG_FILE="${SCRIPT_DIR}/${SCRIPT_NAME}.log"
+LOG_MODE="append"
+LOG_COLORS="false"
 
 # Curl / wget options (NOTE: 'curl --retry n-1' equals 'wget --tries=n')
-CURL_OPTS=("--location" "--silent" "--show-error" "--retry" "2" "--connect-timeout" "30")
-WGET_OPTS=("--no-verbose" "--tries=3" "--timeout=30")
+CURL_OPTS=("--fail" "--location" "--silent" "--show-error" "--retry" "2" "--connect-timeout" "60")
+WGET_OPTS=("--no-verbose" "--tries=3" "--timeout=60")
 
-# I-BlockList (https://www.iblocklist.com/lists)
+# I-BlockList settings (https://www.iblocklist.com/lists)
 IBL_URL="https://list.iblocklist.com/?list=%s&fileformat=p2p&archiveformat=gz"
 IBL_FIN1="iblocklist-%s.p2p.gz"
 IBL_FIN2="iblocklist-%s.p2p"
 IBL_FOUT="iblocklist-merged.p2p"
 declare -A IBL_LISTS=(["level1"]="ydxerpxkpcfqjaybcssw" ["level2"]="gyisgnzbhppbvsphucsw" ["level3"]="uwnukjqktoggdknzrhgh")
 
-# GeoLite2 (https://dev.maxmind.com/geoip/geoip2/geolite2)
+# GeoLite2 settings (https://dev.maxmind.com/geoip/geoip2/geolite2)
 GL2_URL="https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-Country-CSV&license_key=%s&suffix=zip"
 GL2_FIN1="geolite2-country-database.zip"
 GL2_FIN2="geolite2-country-locations-en.csv"
@@ -75,7 +101,7 @@ GL2_LICENSE=""
 GL2_COUNTRIES=()
 GL2_IPVERS=("IPv4")
 
-# Final output file, install destination, compression type
+# Final file, install destination, compression type
 FINAL_FILE="ipfilter.p2p"
 INSTALL_DST="${SCRIPT_DIR}/${SCRIPT_NAME}.p2p"
 COMP_TYPE="none"
@@ -133,14 +159,6 @@ function is_cmd_avail() {
 	return $?
 }
 
-# Check if operating system is Linux on WSL [no arguments]
-# (https://github.com/microsoft/WSL/issues/423, https://github.com/microsoft/WSL/issues/844)
-function is_linux_on_wsl() {
-	local uname="$(uname -r)"
-	[[ "${OSTYPE,,}" == "linux"* && "${uname,,}" == *"microsoft"* ]] && return 0
-	return 1
-}
-
 # Download file [$1: URL, $2: destination path]
 function download_file() {
 	if is_cmd_avail "curl"; then
@@ -155,13 +173,42 @@ function download_file() {
 	fi
 }
 
-# Send desktop notification [$1: type ('normal'/'error'), $2: application name, $3: message summary, $4: message body (optional)]
-# NOTE: '${4:-}'/'${DISPLAY:-}' is required to not throw errors if 'treat unset variables as errors' (set -u) is enabled
+# Verbose print line count of file [$1: file] (NOTE: using wc + awk to suppress
+# extra spaces printed by wc on some OSes)
+function vprint_linecount() {
+	[[ "${VERBOSE_OUTPUT}" == "false" ]] && return 0
+	print_normal "${1##*/}: $(cat "${1}" | wc -l | awk '{ print $1 }') lines"
+}
+
+# Verbose print transfer of item from source(s) to destination [$1: destination,
+# $2..n: source(s)] (NOTE: strip temporary directory from source(s)/destination
+# for cleaner output)
+function vprint_transfer() {
+	[[ "${VERBOSE_OUTPUT}" == "false" ]] && return 0
+
+	local dst="$1"
+	[[ "${dst}" == "${TEMP_DIR}"* ]] && dst="${dst##*/}"
+	shift
+
+	local src="" arg
+	for arg; do
+		[[ "${arg}" == "${TEMP_DIR}"* ]] && arg="${arg##*/}"
+		src+="${arg}, "
+	done
+	src="${src::-2}"
+
+	print_normal "${src} -> ${dst}"
+}
+
+# Send desktop notification [$1: type ('normal'/'error'), $2: application
+# name, $3: message summary, $4: message body (optional)] (NOTE: '${4:-}'/
+# '${DISPLAY:-}' is required to not throw errors if 'treat unset variables
+# as errors' (set -u) is enabled)
 function notify() {
 
-	# Linux/FreeBSD: use notify-send to send notification
-	# (NOTE: Only applies to native Linux; Linux on WSL is handled below instead)
-	if ( [[ "${OSTYPE,,}" == "linux"* ]] && ! is_linux_on_wsl ) || [[ "${OSTYPE,,}" == "freebsd"* ]]; then
+	# Linux/FreeBSD: use notify-send to send notification (NOTE: this only
+	# applies to *native* Linux; Linux on WSL is handled below instead)
+	if [[ "${PLATFORM}" == "linux" || "${PLATFORM}" == "freebsd" ]]; then
 		if ! is_cmd_avail "notify-send"; then
 			print_error "Unable to send notification: command 'notify-send' not available"
 			return 1
@@ -195,7 +242,7 @@ function notify() {
 
 	# macOS: use osascript to send notification
 	# (https://code-maven.com/display-notification-from-the-mac-command-line)
-	if [[ "${OSTYPE,,}" == "darwin"* ]]; then
+	if [[ "${PLATFORM}" == "macos" ]]; then
 		if ! is_cmd_avail "osascript"; then
 			print_error "Unable to send notification: command 'osascript' not available"
 			return 1
@@ -206,7 +253,7 @@ function notify() {
 
 	# Windows and Linux on WSL: use powershell to send notification
 	# (https://stackoverflow.com/a/45902432)
-	if [[ "${OSTYPE,,}" == "msys"* || "${OSTYPE,,}" == "cygwin"* ]] || is_linux_on_wsl; then
+	if [[ "${PLATFORM}" == "windows"* || "${PLATFORM}" == "linux-wsl" ]]; then
 		if ! is_cmd_avail "powershell.exe"; then
 			print_error "Unable to send notification: command 'powershell.exe' not available"
 			return 1
@@ -218,8 +265,8 @@ function notify() {
 		return $?
 	fi
 
-	# Operating system type not supported
-	print_error "Unable to send notification: operating system type '${OSTYPE}' not supported"
+	# Platform / OS type not supported
+	print_error "Unable to send notification: platform / OS type '${PLATFORM}' not supported"
 	return 1
 
 }
@@ -229,10 +276,41 @@ function notify() {
 # sending TERM signal to ourselves to realiably exit even if trap occurs
 # in subshell)
 function error_trap() {
-	print_error "An error occured, aborting." >&2
-	(( ${CMD_NOTIFY} == 1 )) && notify "error" "${SCRIPT_TITLE}" "An error occurred while updating." "Please check output for errors."
+	print_error "An error occured while updating, aborting." >&2
+	[[ "${NOTIFY_USER}" == "true" ]] && notify "error" "${SCRIPT_TITLE}" "An error occurred while updating." "Please check log/output for errors."
 	kill -s TERM $$
 	exit 1
+}
+
+# Handler for exit trap [no arguments] (NOTE: disabling exit on error /
+# error trap to make sure entire handler is executed even if errors occur;
+# restore of previously backed up stdout/stderr explicitely ends logging)
+function exit_trap() {
+	set +e; trap - ERR
+	if [[ -n "${TEMP_DIR}" && -e "${TEMP_DIR}/${LOG_TEMP}" ]]; then
+		exec 1>&3 3>&-; exec 2>&4 4>&-
+		if [[ -n "${LOG_FILE}" && "${LOG_MODE}" != "disabled" ]]; then
+			print_hilite "Saving log file..."
+			[[ "${LOG_MODE}" == "overwrite" ]] && > "${LOG_FILE}"
+			echo "--------------- Started: ${LOG_STARTED} ---------------" >> "${LOG_FILE}"
+			if [[ "${LOG_COLORS}" == "true" ]]; then
+				cat "${TEMP_DIR}/${LOG_TEMP}" >> "${LOG_FILE}"
+			else
+				cat "${TEMP_DIR}/${LOG_TEMP}" | sed 's/[[:cntrl:]]\[[^a-zA-Z]*[a-zA-Z]//g' >> "${LOG_FILE}"
+			fi
+			echo "--------------- Ended: $(date) ---------------" >> "${LOG_FILE}"
+			#[[ "${LOG_MODE}" == "append" ]] && echo >> "${LOG_FILE}"
+		fi
+	fi
+	if [[ -n "${TEMP_DIR}" && -e "${TEMP_DIR}" ]]; then
+		if [[ "${KEEP_TEMP}" == "true" ]]; then
+			print_hilite "Keeping temporary files in '${TEMP_DIR}'."
+		else
+			print_hilite "Removing temporary folder..."
+			rm -rf "${TEMP_DIR}"
+		fi
+	fi
+	print_normal
 }
 
 # Split string into array [$1: string, $2: separator (single character), $3: name of target array variable]
@@ -331,7 +409,7 @@ function cidr_to_range_ipv6() {
 #                                      -
 # --------------------------------------
 
-# Setup error handling (NOTE: elaborate approach to reliably handle errors
+# Set up error handling (NOTE: elaborate approach to reliably handle errors
 # occurring in subshells / process substitutions; set: '-e' exit on error,
 # '-u' treat unset variables as errors, '-E' subshells / process substitutions
 # inherit error trap of parent, '-o pipefail' return value of pipeline is
@@ -339,9 +417,9 @@ function cidr_to_range_ipv6() {
 set -euE -o pipefail
 trap "exit 1" TERM; trap "error_trap" ERR
 
-# Set cosmetic traps
+# Set up traps for interrupt and exit
 trap "trap - ERR; echo -en \"\r\e[2K\"" INT
-trap "print_normal" EXIT
+trap "exit_trap" EXIT
 
 # Set window title, print title
 set_window_title "${SCRIPT_TITLE}"
@@ -353,27 +431,27 @@ print_normal
 # whenever -h/--help is present, even if there are further valid / invalid
 # options present)
 if in_array "-h" "$@" || in_array "--help" "$@"; then
-	print_normal "Usage: $(basename "$0") [OPTIONS]"
+	print_normal "Usage: ${SCRIPT_FILE} [OPTIONS]"
 	print_normal
 	print_normal "Options:"
 	print_normal "  -n, --notify       Send desktop notification to inform user"
 	print_normal "                     about success/failure (useful for cron)"
-	print_normal "  -k, --keep-temp    Do not remove temporary folder when done"
+	print_normal "  -k, --keep-temp    Do not remove temporary folder on exit"
 	print_normal "                     (useful for debugging)"
 	print_normal "  -h, --help         Display this help message"
 	exit 0
 fi
 
 # Parse command line
-invalid=0
+result=0
 for arg in "$@"; do
 	case "${arg}" in
-		"-n"|"--notify")    CMD_NOTIFY=1; ;;
-		"-k"|"--keep-temp") CMD_KEEPTEMP=1; ;;
-		*)                  print_error "Invalid option '${arg}'"; invalid=$((invalid + 1)); ;;
+		"-n"|"--notify") NOTIFY_USER="true"; ;;
+		"-k"|"--keep-temp") KEEP_TEMP="true"; ;;
+		*) print_error "Invalid option '${arg}'"; result=1; ;;
 	esac
 done
-if (( ${invalid} > 0 )); then
+if (( ${result} != 0 )); then
 	print_normal
 	print_error "Invalid command line. Use '--help' to display usage information."
 	exit 2
@@ -389,70 +467,87 @@ if ! source "${SCRIPT_CONFIG}"; then
 	exit 1
 fi
 
+# Check and normalize configuration settings
+result=0
+case "${VERBOSE_OUTPUT,,}" in
+	"true"|"false") VERBOSE_OUTPUT="${VERBOSE_OUTPUT,,}"; ;;
+	*) print_error "Invalid verbose output setting '${VERBOSE_OUTPUT}'"; result=1; ;;
+esac
+case "${LOG_MODE,,}" in
+	"disabled"|"overwrite"|"append") LOG_MODE="${LOG_MODE,,}"; ;;
+	*) print_error "Invalid log mode setting '${LOG_MODE}'"; result=1; ;;
+esac
+case "${LOG_COLORS,,}" in
+	"true"|"false") LOG_COLORS="${LOG_COLORS,,}"; ;;
+	*) print_error "Invalid log colors setting '${LOG_COLORS}'"; result=1; ;;
+esac
+for ((i=0; i < ${#GL2_IPVERS[@]}; i++)); do
+	case "${GL2_IPVERS[i],,}" in
+		"ipv4") GL2_IPVERS[i]="IPv4"; ;;
+		"ipv6") GL2_IPVERS[i]="IPv6"; ;;
+		*) print_error "Invalid Geolite2 IP version setting '${GL2_IPVERS[i]}'"; result=1; ;;
+	esac
+done
+case "${COMP_TYPE,,}" in
+	"none"|"gzip"|"bzip2"|"xz"|"zip") COMP_TYPE="${COMP_TYPE,,}"; ;;
+	*) print_error "Invalid compression type setting '${COMP_TYPE}'"; result=1; ;;
+esac
+if (( ${result} != 0 )); then
+	print_normal
+	print_error "One or more configuration settings are invalid, please check configuration."
+	exit 1
+fi
+
 # Check command availability (NOTE: do not check for coreutils like cat,
 # sort, ..., only check for commands that usually have their own package)
-missing=0
+result=0
 commands=("awk" "grep" "gunzip" "sed" "unzip")
-if (( ${CMD_NOTIFY} == 1 )); then
-	case "${OSTYPE,,}" in
-		"linux"*)
-			# Require 'powershell.exe' for Linux on WSL and 'notify-send' for native Linux
-			# (NOTE: this has to be 'powershell.exe', just 'powershell' won't work)
-			if is_linux_on_wsl; then
-				commands+=("powershell.exe")
-			else
-				commands+=("notify-send")
-			fi
-			;;
-		"freebsd"*)
-			commands+=("notify-send"); ;;
-		"darwin"*)
-			commands+=("osascript"); ;;
-		"msys"*|"cygwin"*)
-			# NOTE: although just 'powershell' works fine on Cygwin/MSYS2/PortableGit,
-			# 'powershell.exe' is more precise
-			commands+=("powershell.exe"); ;;
-		*)
-			print_error "Option '-n/--notify' not supported on operating system type '${OSTYPE}', aborting."
-			exit 1
-			;;
+if [[ "${NOTIFY_USER}" == "true" ]]; then
+	case "${PLATFORM}" in
+		"linux") commands+=("notify-send"); ;;
+		"macos") commands+=("osascript"); ;;
+		"freebsd") commands+=("notify-send"); ;;
+		# Although 'powershell' works fine on Cygwin/MSYS2/PortableGit, for Linux on
+		# WSL 'powershell.exe' is required and more fitting for Windows environments
+		# anyway
+		"windows"*|"linux-wsl") commands+=("powershell.exe"); ;;
+		*) print_error "Option '-n/--notify' not supported on platform / OS type '${PLATFORM}'"; result=1; ;;
 	esac
 fi
-case "${COMP_TYPE,,}" in
-	"none")  :; ;;
-	"gzip")  commands+=("gzip"); ;;
+case "${COMP_TYPE}" in
+	"gzip") commands+=("gzip"); ;;
 	"bzip2") commands+=("bzip2"); ;;
-	"xz")    commands+=("xz"); ;;
-	"zip")   commands+=("zip"); ;;
-	*)
-		print_error "Invalid compression type '${COMP_TYPE}', please check configuration."
-		exit 1
-		;;
+	"xz") commands+=("xz"); ;;
+	"zip") commands+=("zip"); ;;
 esac
 for cmd in "${commands[@]}"; do
 	if ! is_cmd_avail "${cmd}"; then
 		print_error "Command '${cmd}' is not available"
-		missing=$((missing + 1))
+		result=1
 	fi
 done
 if ! is_cmd_avail "curl" && ! is_cmd_avail "wget"; then
 	print_error "Neither command 'curl' nor 'wget' is available"
-	missing=$((missing + 1))
+	result=1
 fi
-if (( ${missing} > 0 )); then
+if (( ${result} != 0 )); then
 	print_normal
 	print_error "One or more required commands are unavailable, please check dependencies."
 	exit 1
 fi
 
-# Create temporary folder, set cleanup trap (NOTE: replaces initially set
-# cosmetic exit trap; mktemp call simplified for multi-platform use)
+# Create temporary folder (NOTE: mktemp call simplified for multi-platform
+# use; cleanup is handled by exit_trap)
 print_hilite "Creating temporary folder..."
-tmpdir="$(mktemp -d "/tmp/${SCRIPT_NAME}.XXXXXXXXXX")"
-if (( ${CMD_KEEPTEMP} == 0 )); then
-	trap "print_hilite \"Removing temporary folder...\"; rm -rf \"${tmpdir}\"; print_normal" EXIT
-else
-	trap "print_normal; print_hilite \"Keeping temporary files in '${tmpdir}'.\"; print_normal" EXIT
+TEMP_DIR="$(mktemp -d "/tmp/${SCRIPT_NAME}.XXXXXXXXXX")"
+
+# Set up logging (NOTE: log is written to temporary dir/file first and then
+# processed/finalized on exit by exit_trap; backups of stdout/stderr allow
+# for explicitely ending logging by restoring)
+if [[ "${LOG_MODE}" != "disabled" ]]; then
+	print_hilite "Setting up logging..."
+	exec 3>&1 4>&2
+	exec > >(tee -i "${TEMP_DIR}/${LOG_TEMP}") 2>&1
 fi
 
 
@@ -462,25 +557,28 @@ fi
 #                                      -
 # --------------------------------------
 
-> "${tmpdir}/${IBL_FOUT}"
+> "${TEMP_DIR}/${IBL_FOUT}"
 if (( ${#IBL_LISTS[@]} > 0 )); then
 
 	# Download blocklists
 	print_hilite "Downloading I-BlockList blocklists..."
 	for list in "${!IBL_LISTS[@]}"; do
-		print_normal "Downloading I-BlockList blocklist '${list}'..."
+		print_normal "Downloading blocklist '${list}'..."
 		printf -v src "${IBL_URL}" "${IBL_LISTS["${list}"]}"
-		printf -v dst "${tmpdir}/${IBL_FIN1}" "${list}"
+		printf -v dst "${TEMP_DIR}/${IBL_FIN1}" "${list}"
+		vprint_transfer "${dst}" "${src}"
 		download_file "${src}" "${dst}"
 	done
 
 	# Decompress blocklists
 	print_hilite "Decompressing I-BlockList blocklists..."
 	for list in "${!IBL_LISTS[@]}"; do
-		print_normal "Decompressing I-BlockList blocklist '${list}'..."
-		printf -v src "${tmpdir}/${IBL_FIN1}" "${list}"
-		printf -v dst "${tmpdir}/${IBL_FIN2}" "${list}"
+		print_normal "Decompressing blocklist '${list}'..."
+		printf -v src "${TEMP_DIR}/${IBL_FIN1}" "${list}"
+		printf -v dst "${TEMP_DIR}/${IBL_FIN2}" "${list}"
+		vprint_transfer "${dst}" "${src}"
 		gunzip < "${src}" > "${dst}"
+		vprint_linecount "${dst}"
 	done
 
 	# Merge blocklists (NOTE: version sort works well for IPv4; for IPv6,
@@ -488,14 +586,16 @@ if (( ${#IBL_LISTS[@]} > 0 )); then
 	# IPv4 is dominant anyway, version sort is being used; sed command is
 	# used to remove empty and comment lines)
 	print_hilite "Merging I-BlockList blocklists..."
-	readarray -t src < <(printf "${tmpdir}/${IBL_FIN2}\n" "${!IBL_LISTS[@]}")
-	dst="${tmpdir}/${IBL_FOUT}"
+	readarray -t src < <(printf "${TEMP_DIR}/${IBL_FIN2}\n" "${!IBL_LISTS[@]}")
+	dst="${TEMP_DIR}/${IBL_FOUT}"
+	vprint_transfer "${dst}" "${src[@]}"
 	cat "${src[@]}" | sort --version-sort | uniq > "${dst}"
-	if [[ "${OSTYPE,,}" == "darwin"* || "${OSTYPE,,}" == "freebsd"* ]]; then
+	if [[ "${PLATFORM}" == "macos" || "${PLATFORM}" == "freebsd" ]]; then
 		sed -i "" -e '/^$/d' -e '/^#.*$/d' "${dst}"
 	else
 		sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"
 	fi
+	vprint_linecount "${dst}"
 
 fi
 
@@ -506,31 +606,34 @@ fi
 #                                      -
 # --------------------------------------
 
-> "${tmpdir}/${GL2_FOUT2}"
+> "${TEMP_DIR}/${GL2_FOUT2}"
 if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 
 	# Download database
 	print_hilite "Downloading GeoLite2 database..."
 	printf -v src "${GL2_URL}" "${GL2_LICENSE}"
-	dst="${tmpdir}/${GL2_FIN1}"
+	dst="${TEMP_DIR}/${GL2_FIN1}"
+	vprint_transfer "${dst}" "${src}"
 	download_file "${src}" "${dst}"
 
 	# Extract database (NOTE: on Windows, unzip '*.csv' does not work while
 	# unzip '**.csv' does; no idea why exactly, but it works, so let it be)
 	print_hilite "Extracting GeoLite2 database..."
-	src="${tmpdir}/${GL2_FIN1}"
-	dst="${tmpdir}"
-	if [[ "${OSTYPE,,}" == "msys"* || "${OSTYPE,,}" == "cygwin"* ]]; then
+	src="${TEMP_DIR}/${GL2_FIN1}"
+	dst="${TEMP_DIR}"
+	vprint_transfer "temporary directory" "${src}"
+	if [[ "${PLATFORM}" == "windows"* ]]; then
 		unzip -q -o -j -LL "${src}" '**.csv' -d "${dst}"
 	else
 		unzip -q -o -j -LL "${src}" '*.csv' -d "${dst}"
 	fi
+	[[ "${VERBOSE_OUTPUT}" == "true" ]] && print_normal "$(ls -l "${dst}"/*.csv | wc -l | awk '{ print $1 }') files"
 
 	# Parse country locations, generate dict country names -> ids (NOTE: using
 	# split_string here as it deals perfectly with quotes, separators in items
 	# etc.; performance is not relevant here)
 	print_hilite "Parsing GeoLite2 countries..."
-	src="${tmpdir}/${GL2_FIN2}"
+	src="${TEMP_DIR}/${GL2_FIN2}"
 	declare -A country_ids
 	while read -r line; do
 		split_string "${line}" "," array
@@ -544,6 +647,7 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 			country_ids["${continent_name,,}"]="${geoname_id}"
 		fi
 	done < <(tail -q -n +2 "${src}")
+	[[ "${VERBOSE_OUTPUT}" == "true" ]] && print_normal "${#country_ids[@]} countries"
 
 	# Parse country blocks, generate country blocklists (NOTE: most, probably
 	# only performance-critical part of script; awk call simplified for multi-
@@ -552,13 +656,12 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 	countries=()
 	for country in "${GL2_COUNTRIES[@]}"; do
 		in_array "${country,,}" "${!country_ids[@]}" || { print_warn "Skipping invalid country '${country}' in setting GL2_COUNTRIES"; continue; }
-		print_normal "Generating GeoLite2 blocklist '${country}'..."
+		print_normal "Generating blocklist for country '${country}'..."
 		countries+=("${country}")
-		printf -v dst "${tmpdir}/${GL2_FOUT1}" "${country,,}"
+		printf -v dst "${TEMP_DIR}/${GL2_FOUT1}" "${country,,}"
 		> "${dst}"
 		for ipv in "${GL2_IPVERS[@]}"; do
-			[[ "${ipv,,}" != "ipv4" && "${ipv,,}" != "ipv6" ]] && { print_warn "Skipping invalid IP version '${ipv}' in setting GL2_IPVERS"; continue; }
-			printf -v src "${tmpdir}/${GL2_FIN3}" "${ipv,,}"
+			printf -v src "${TEMP_DIR}/${GL2_FIN3}" "${ipv,,}"
 			[[ "${ipv,,}" == "ipv4" ]] && sort_opts="--version-sort" || sort_opts=""
 			grep --no-filename "${country_ids["${country,,}"]}" "${src}" | awk -F ',' '{ print $1 }' | \
 				while read -r cidr; do
@@ -566,6 +669,7 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 					printf "GeoLite2 %s %s:%s-%s\n" "${country}" "${ipv}" "${sips}" "${eips}"
 				done | sort ${sort_opts} | uniq >> "${dst}"
 		done
+		vprint_linecount "${dst}"
 	done
 
 	# Merge blocklists (NOTE: version sort works well for IPv4; for IPv6,
@@ -573,17 +677,19 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 	# IPv4 is dominant anyway, version sort is being used; sed command is
 	# used to remove empty and comment lines)
 	print_hilite "Merging GeoLite2 blocklists..."
-	dst="${tmpdir}/${GL2_FOUT2}"
+	dst="${TEMP_DIR}/${GL2_FOUT2}"
 	> "${dst}"
 	if (( ${#countries[@]} > 0 )); then
-		readarray -t src < <(printf "${tmpdir}/${GL2_FOUT1}\n" "${countries[@],,}")
+		readarray -t src < <(printf "${TEMP_DIR}/${GL2_FOUT1}\n" "${countries[@],,}")
+		vprint_transfer "${dst}" "${src[@]}"
 		cat "${src[@]}" | sort --version-sort | uniq > "${dst}"
-		if [[ "${OSTYPE,,}" == "darwin"* || "${OSTYPE,,}" == "freebsd"* ]]; then
+		if [[ "${PLATFORM}" == "macos" || "${PLATFORM}" == "freebsd" ]]; then
 			sed -i "" -e '/^$/d' -e '/^#.*$/d' "${dst}"
 		else
 			sed --in-place --expression='/^$/d' --expression='/^#.*$/d' "${dst}"
 		fi
 	fi
+	vprint_linecount "${dst}"
 
 fi
 
@@ -596,14 +702,17 @@ fi
 
 # Merge I-BlockList and GeoLite2 blocklists
 print_hilite "Merging I-BlockList and GeoLite2 blocklists..."
-readarray -t src < <(printf "${tmpdir}/%s\n" "${IBL_FOUT}" "${GL2_FOUT2}")
-dst="${tmpdir}/${FINAL_FILE}"
+readarray -t src < <(printf "${TEMP_DIR}/%s\n" "${IBL_FOUT}" "${GL2_FOUT2}")
+dst="${TEMP_DIR}/${FINAL_FILE}"
+vprint_transfer "${dst}" "${src[@]}"
 cat "${src[@]}" > "${dst}"
+vprint_linecount "${dst}"
 
-# Install final output file to specified destination
+# Install final file to specified destination
 print_hilite "Installing final IP filter file..."
-src="${tmpdir}/${FINAL_FILE}"
+src="${TEMP_DIR}/${FINAL_FILE}"
 dst="${INSTALL_DST}"
+vprint_transfer "${dst}" "${src}"
 cp "${src}" "${dst}"
 
 # Compress installed file in-place (NOTE: using '<cmd> -c "${src}" > "${dst}"'
@@ -611,19 +720,20 @@ cp "${src}" "${dst}"
 # use option '--force' which has other, potentially undesired side effects; zip
 # by default updates existing archives, thus using output to stdout + redirect
 # to create a fresh archive each time)
-if [[ "${COMP_TYPE,,}" != "none" ]]; then
+if [[ "${COMP_TYPE}" != "none" ]]; then
 	print_hilite "Compressing installed file in-place..."
 	src="${INSTALL_DST}"
-	case "${COMP_TYPE,,}" in
-		"gzip")  dst="${src}.gz"; gzip -c "${src}" > "${dst}"; ;;
+	case "${COMP_TYPE}" in
+		"gzip") dst="${src}.gz"; gzip -c "${src}" > "${dst}"; ;;
 		"bzip2") dst="${src}.bz2"; bzip2 -c "${src}" > "${dst}"; ;;
-		"xz")    dst="${src}.xz"; xz -c "${src}" > "${dst}"; ;;
-		"zip")   dst="${src%.*}.zip"; zip -q -j - "${src}" > "${dst}"; ;;
+		"xz") dst="${src}.xz"; xz -c "${src}" > "${dst}"; ;;
+		"zip") dst="${src%.*}.zip"; zip -q -j - "${src}" > "${dst}"; ;;
 	esac
 	rm "${src}"
+	vprint_transfer "${dst}" "${src}"
 fi
 
 # Update successfully completed
 print_good "IP filter successfully updated."
-(( ${CMD_NOTIFY} == 1 )) && notify "normal" "${SCRIPT_TITLE}" "IP filter successfully updated."
+[[ "${NOTIFY_USER}" == "true" ]] && notify "normal" "${SCRIPT_TITLE}" "IP filter successfully updated."
 exit 0
