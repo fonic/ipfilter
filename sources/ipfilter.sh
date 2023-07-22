@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
-# -------------------------------------------------------------------------
-#                                                                         -
-#  IP Filter Updater & Generator                                          -
-#                                                                         -
-#  Created by Fonic (https://github.com/fonic)                            -
-#  Date: 04/15/19 - 04/28/21                                              -
-#                                                                         -
-# -------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+#                                                                              -
+#  IP Filter Updater & Generator                                               -
+#                                                                              -
+#  Created by Fonic (https://github.com/fonic)                                 -
+#  Date: 04/15/19 - 07/22/23                                                   -
+#                                                                              -
+# ------------------------------------------------------------------------------
 
 # --------------------------------------
 #                                      -
@@ -609,11 +609,13 @@ fi
 > "${TEMP_DIR}/${GL2_FOUT2}"
 if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 
-	# Download database
+	# Download database (NOTE: using 'src2' to obfuscate GL2 license key in
+	# console/log output)
 	print_hilite "Downloading GeoLite2 database..."
 	printf -v src "${GL2_URL}" "${GL2_LICENSE}"
+	printf -v src2 "${GL2_URL}" "xxxxxxxxxxxxxxxx"
 	dst="${TEMP_DIR}/${GL2_FIN1}"
-	vprint_transfer "${dst}" "${src}"
+	vprint_transfer "${dst}" "${src2}"
 	download_file "${src}" "${dst}"
 
 	# Extract database (NOTE: on Windows, unzip '*.csv' does not work while

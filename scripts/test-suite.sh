@@ -5,7 +5,7 @@
 #  IP Filter Updater & Generator Test Suite                               -
 #                                                                         -
 #  Created by Fonic <https://github.com/fonic>                            -
-#  Date: 10/06/20 - 04/28/21                                              -
+#  Date: 10/06/20 - 04/29/21                                              -
 #                                                                         -
 # -------------------------------------------------------------------------
 
@@ -92,7 +92,7 @@ function get_file_size() {
 
 # Join countries to string [$1..$n: country]
 function countries_to_str {
-	local str
+	local arg str
 	for arg; do
 		str+="${str+ }\"${arg}\""
 	done

@@ -37,57 +37,50 @@ bash, gawk, grep, sed, unzip, curl, wget, gzip, bzip2, xz, zip
 **Homepage:**<br/>
 [https://gitforwindows.org/](https://gitforwindows.org/)
 
+**Downloads:**<br/>
+[https://git-scm.com/download/win](https://git-scm.com/download/win)
+
 **Package management:**<br/>
 _Git for Windows_ does not feature a package management system.<br/>
 However, all required dependencies are met out of the box.
 
-## Ubuntu 20.04 LTS for WSL on Windows 10
+## Ubuntu for WSL on Windows 10/11
 
 **Homepage:**<br/>
 [https://ubuntu.com/wsl](https://ubuntu.com/wsl)
 
-**Quick setup:**
+**Quick setup:**<br/>
+Open *PowerShell* or *Windows Command Prompt* and enter this command: `wsl --install`<br/>
+Once the installation is complete, reboot, open _Start_, find _Ubuntu_ and run/open it.
 
-1. PowerShell (run as Administrator):<br/>
-   ```
-   dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
-   dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
-   ```
-
-2. Restart Windows
-
-3. PowerShell (run as Administrator):<br/>
-   ```
-   cd $HOME\Downloads
-   Invoke-WebRequest -Uri https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi -OutFile wsl_update_x64.msi -UseBasicParsing
-   .\wsl_update_x64.msi
-   wsl --set-default-version 2
-   Invoke-WebRequest -Uri https://aka.ms/wslubuntu2004 -OutFile Ubuntu_20.04_LTS.appx -UseBasicParsing
-   Add-AppxPackage .\Ubuntu_20.04_LTS.appx
-   ```
-
-4. In _Start Menu_, find _Ubuntu 20.04 LTS_ and run it
-
-Refer to [Microsoft Docs](https://docs.microsoft.com) articles _[Install WSL on Windows 10](https://docs.microsoft.com/en-us/windows/wsl/install-win10)_ and _[Manually download Windows Subsystem for Linux (WSL) Distros](https://docs.microsoft.com/en-us/windows/wsl/install-manual)_ for detailed instructions.
+**Advanced setup:**<br/>
+Refer to [Microsoft Learn](https://learn.microsoft.com/en-us/) articles _[Install Linux on Windows with WSL](https://learn.microsoft.com/en-us/windows/wsl/install)_ and/or _[Manual installation steps for older versions of WSL](https://learn.microsoft.com/en-us/windows/wsl/install-manual)_ for detailed instructions.
 
 **Update package databases:**<br/>
 `$ sudo apt update`<br/>
+-or-<br/>
 `$ sudo apt-get update`
 
 **Search packages:**<br/>
 `$ apt search <keyword>`<br/>
+-or-<br/>
 `$ apt-cache search <keyword>`
 
 **Install packages:**<br/>
 `$ sudo apt install <package>`<br/>
+-or-<br/>
 `$ sudo apt-get install <package>`
 
 **Upgrade everything:**<br/>
 `$ sudo apt upgrade`<br/>
+-or-<br/>
 `$ sudo apt-get upgrade`
 
 **Install required packages:**<br/>
-`$ sudo apt install bash gawk grep sed unzip curl wget gzip bzip2 xz-utils zip'`<br/>
-`$ sudo apt-get install bash gawk grep sed unzip curl wget gzip bzip2 xz-utils zip'`
+`$ sudo apt install bash gawk grep sed unzip curl wget gzip bzip2 xz-utils zip`<br/>
+-or-<br/>
+`$ sudo apt-get install bash gawk grep sed unzip curl wget gzip bzip2 xz-utils zip`
 
-<br/>_Last updated: 04/28/21_
+##
+
+_Last updated: 07/22/23_
