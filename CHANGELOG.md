@@ -1,4 +1,4 @@
-## Changelog for v4.1 release:
+## Changelog for v4.1 release
 
 Changes:
 - obfuscate GeoLite2 license key in console/log output (to prevent leaking sensitive information via logs)
@@ -7,7 +7,7 @@ Changes:
 - updated instructions for Windows users in `Windows Runtime Environments.md`: simplified WSL installation, updated URLs, various minor changes
 - added `CHANGELOG.md`
 
-## Changelog for v4.0 release:
+## Changelog for v4.0 release
 
 Changes:
 - added verbose output feature (optional, configurable)
@@ -23,13 +23,13 @@ GitHub-only changes (not part of release):
 - added hints document for Windows runtime environments
 - updated `README.md`
 
-## Changelog for v3.1 release:
+## Changelog for v3.1 release
 
 Changes:
 - fixed bug regarding overwriting existing compressed output files (issue #6)
 - added support for *xz* compression of output file
 
-## Changelog for v3.0 release:
+## Changelog for v3.0 release
 
 Changes:
 - added support for _Cygwin_, _MSYS2_ and _Linux on Windows Subsystem for Linux (WSL)_
@@ -40,14 +40,14 @@ Changes:
 - applied additional minor changes (comments, code improvements, code formatting, console prints, command line arguments)
 - updated `README.md`
 
-## Changelog for v2.1 release:
+## Changelog for v2.1 release
 
 Changes:
 - changed some comments in script
 - changed some comments in config
 - updated `README.md`
 
-## Changelog for v2.0 release:
+## Changelog for v2.0 release
 
 Changes:
 - added support for compression of final output file (configuration item `COMP_TYPE`)
@@ -56,7 +56,7 @@ Changes:
 - fixed selective extraction of *.csv files of GeoLite2 archive on Windows
 - applied additional minor changes (comments, code improvements, code formatting)
 
-## Changelog for v1.0 release:
+## Changelog for v1.0 release
 
 Initial release
 
