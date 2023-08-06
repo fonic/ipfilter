@@ -13,7 +13,7 @@ _Bash (>=4.0)_, _awk_, _grep_, _gunzip_, _sed_, _unzip_, _curl_ -or- _wget_, _gz
 
 macOS users might want to use [Homebrew](https://brew.sh/) to install missing dependencies.
 
-Windows users need to setup a suitable runtime environment. [Cygwin](https://www.cygwin.com/), [MSYS2](https://www.msys2.org/), [Git for Windows](https://git-scm.com/download/win) and [Windows Subsystem for Linux](https://learn.microsoft.com/en-us/windows/wsl/about) should all work fine. [Git for Windows](https://git-scm.com/download/win) might be the best choice to get started - it is reasonably lightweight, easy to set up, meets all requirements out of the box and is also available as a portable version. Refer to [Windows Runtime Environments](https://github.com/fonic/ipfilter/blob/master/documents/Windows%20Runtime%20Environments.md) for additional information.
+Windows users need to setup a suitable runtime environment. [Cygwin](https://www.cygwin.com/), [MSYS2](https://www.msys2.org/), [Git for Windows](https://git-scm.com/download/win) and [Windows Subsystem for Linux](https://learn.microsoft.com/en-us/windows/wsl/about) should all work fine. [Git for Windows](https://git-scm.com/download/win) might be the best choice to get started - it is reasonably lightweight, easy to set up, meets all requirements out of the box and is also available as a portable version. Refer to [Windows Runtime Environments](https://github.com/fonic/ipfilter/blob/master/Windows%20Runtime%20Environments.md) for additional information.
 
 ## Download & Installation
 Refer to the [releases](https://github.com/fonic/ipfilter/releases) section for downloads links. There is no installation required. Simply extract the downloaded archive to a folder of your choice.
