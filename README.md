@@ -1,6 +1,11 @@
 # IP Filter Updater &amp; Generator
 Generates PeerGuardian (`.p2p`) blocklist from [I-Blocklist](https://www.iblocklist.com/) blocklists and [GeoLite2](https://dev.maxmind.com/geoip/geoip2/geolite2/) country blocks.
 
+## Donations
+I'm striving to become a full-time developer of [Free and open-source software (FOSS)](https://en.wikipedia.org/wiki/Free_and_open-source_software). Donations help me achieve that goal and are highly appreciated.
+
+<a href="https://www.buymeacoffee.com/fonic"><img src="https://raw.githubusercontent.com/fonic/donate-buttons/main/buymeacoffee-button.png" alt="Buy Me A Coffee" height="35"></a>&nbsp;&nbsp;&nbsp;<a href="https://paypal.me/fonicmaxxim"><img src="https://raw.githubusercontent.com/fonic/donate-buttons/main/paypal-button.png" alt="Donate via PayPal" height="35"></a>
+
 ## Requirements
 **Operating System:**<br/>
 _Linux_, _FreeBSD_, _macOS_ or _Windows_.
@@ -151,4 +156,4 @@ Note that *root privileges* are generally **not** required. Just make sure the c
 
 ##
 
-_Last updated: 07/22/23_
+_Last updated: 08/09/23_

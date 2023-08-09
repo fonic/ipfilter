@@ -51,7 +51,7 @@ However, all required dependencies are met out of the box.
 
 **Quick setup:**<br/>
 Open *PowerShell* or *Windows Command Prompt* and enter this command: `wsl --install`<br/>
-Once the installation is complete, reboot, open _Start_, find _Ubuntu_ and run/open it.
+Once installation is complete, reboot, then open _Start_, find _Ubuntu_ and run/open it.
 
 **Advanced setup:**<br/>
 Refer to [Microsoft Learn](https://learn.microsoft.com/en-us/) articles _[Install Linux on Windows with WSL](https://learn.microsoft.com/en-us/windows/wsl/install)_ and/or _[Manual installation steps for older versions of WSL](https://learn.microsoft.com/en-us/windows/wsl/install-manual)_ for detailed instructions.
@@ -83,4 +83,4 @@ Refer to [Microsoft Learn](https://learn.microsoft.com/en-us/) articles _[Instal
 
 ##
 
-_Last updated: 07/22/23_
+_Last updated: 08/09/23_
