@@ -24,7 +24,45 @@ Windows users need to setup a suitable runtime environment. [Cygwin](https://www
 Refer to the [releases](https://github.com/fonic/ipfilter/releases) section for downloads links. There is no installation required. Simply extract the downloaded archive to a folder of your choice.
 
 ## Configuration
-Open `ipfilter.conf` in your favorite text editor and adjust the settings to your liking. Refer to embedded comments for details. Note that before changing any settings, it is recommended to run the script with *default settings* first to make sure it works as expected.
+Open `ipfilter.conf` in your favorite text editor and adjust the settings to your liking. Refer to embedded comments for details. Note that before changing any settings, it is recommended to run the script with *default settings* first to make sure it works as expected. Refer to [this section](#configuration-options--defaults) for a listing of all configuration options and current defaults.
+
+## Subscriptions
+Using the [I-Blocklist](https://www.iblocklist.com/) feature does not require a subscription, as most of the provided lists are free to download. There are a few lists that are only available to subscribers, though. Non-free lists are currently untested - please open an [Issue](https://github.com/fonic/ipfilter/issues) if you have a subscription and want to help improving support for these lists.
+
+Using the [GeoLite2](https://dev.maxmind.com/geoip/geoip2/geolite2/) feature requires a license key which can be obtained *free of charge* after [signing up](https://www.maxmind.com/en/geolite2/signup) (refer to [this blog post](https://blog.maxmind.com/2019/12/18/significant-changes-to-accessing-and-using-geolite2-databases/) for details).
+
+## Usage
+As settings are configured via `ipfilter.conf`, the script intentionally features only few command line options:
+```
+--==[ IP Filter Updater & Generator ]==--
+
+Usage: ipfilter.sh [OPTIONS]
+
+Options:
+  -n, --notify       Send desktop notification to inform user
+                     about success/failure (useful for cron)
+  -k, --keep-temp    Do not remove temporary folder on exit
+                     (useful for debugging)
+  -h, --help         Display this help message
+```
+
+In most cases it should be sufficient to run the script without supplying any options:
+```
+$ cd ipfilter-vX.Y
+$ ./ipfilter.sh
+```
+
+When running _non-interactively_ (e.g. via cron), you might want to supply option `-n/--notify` to send desktop notifications informing you about success/failure.
+
+Note that *root privileges* are generally **not** required. Just make sure the configured `INSTALL_DST` points to a location writeable by the user running the script. The same applies to `LOG_FILE` if logging is enabled.
+
+## Output & Logging
+
+Output is sent to both console and log file `ipfilter.log`:
+
+![Screenshot](https://raw.githubusercontent.com/fonic/ipfilter/master/SCREENSHOT.png)
+
+## Configuration Options & Defaults
 
 Configuration options and current defaults:
 ```sh
@@ -35,7 +73,7 @@ Configuration options and current defaults:
 #  IP Filter Updater & Generator                                               -
 #                                                                              -
 #  Created by Fonic (https://github.com/fonic)                                 -
-#  Date: 04/15/19 - 07/22/23                                                   -
+#  Date: 04/15/19 - 08/10/23                                                   -
 #                                                                              -
 # ------------------------------------------------------------------------------
 
@@ -89,6 +127,7 @@ IBL_LISTS=(["level1"]="ydxerpxkpcfqjaybcssw" ["level2"]="gyisgnzbhppbvsphucsw" [
 
 # License key to use to download GeoLite2 country blocks database
 # NOTE:    See 'https://blog.maxmind.com/2019/12/18/significant-changes-to-accessing-and-using-geolite2-databases/' for details
+#          License key is required in order to use the GeoLite2 feature
 # Format:  String
 # Example: GL2_LICENSE="1a2b3c4d5e6f7g8h"
 # Default: GL2_LICENSE=""
@@ -124,36 +163,6 @@ INSTALL_DST="${SCRIPT_DIR}/${SCRIPT_NAME}.p2p"
 COMP_TYPE="none"
 ```
 
-## Subscriptions
-Using the [I-Blocklist](https://www.iblocklist.com/) feature does not require a subscription, as most of the provided lists are free to download. There are a few lists that are only available to subscribers, though. Non-free lists are currently untested - please open an [Issue](https://github.com/fonic/ipfilter/issues) if you have a subscription and want to help improving support for these lists.
-
-Using the [GeoLite2](https://dev.maxmind.com/geoip/geoip2/geolite2/) feature requires a license key which can be obtained *free of charge* after [signing up](https://www.maxmind.com/en/geolite2/signup) (refer to [this blog post](https://blog.maxmind.com/2019/12/18/significant-changes-to-accessing-and-using-geolite2-databases/) for details).
-
-## Usage
-As settings are configured via `ipfilter.conf`, the script intentionally features only few command line options:
-```
---==[ IP Filter Updater & Generator ]==--
-
-Usage: ipfilter.sh [OPTIONS]
-
-Options:
-  -n, --notify       Send desktop notification to inform user
-                     about success/failure (useful for cron)
-  -k, --keep-temp    Do not remove temporary folder on exit
-                     (useful for debugging)
-  -h, --help         Display this help message
-```
-
-In most cases it should be sufficient to run the script without supplying any options:
-```
-$ cd ipfilter-vX.Y
-$ ./ipfilter.sh
-```
-
-When running _non-interactively_ (e.g. via cron), you might want to supply option `-n/--notify` to send desktop notifications informing you about success/failure.
-
-Note that *root privileges* are generally **not** required. Just make sure the configured `INSTALL_DST` points to a location writeable by the user running the script. The same applies to `LOG_FILE` if logging is enabled.
-
 ##
 
-_Last updated: 08/09/23_
+_Last updated: 08/10/23_

@@ -5,7 +5,7 @@
 #  IP Filter Updater & Generator                                               -
 #                                                                              -
 #  Created by Fonic (https://github.com/fonic)                                 -
-#  Date: 04/15/19 - 07/22/23                                                   -
+#  Date: 04/15/19 - 08/10/23                                                   -
 #                                                                              -
 # ------------------------------------------------------------------------------
 
@@ -511,7 +511,7 @@ if [[ "${NOTIFY_USER}" == "true" ]]; then
 		# WSL 'powershell.exe' is required and more fitting for Windows environments
 		# anyway
 		"windows"*|"linux-wsl") commands+=("powershell.exe"); ;;
-		*) print_error "Option '-n/--notify' not supported on platform / OS type '${PLATFORM}'"; result=1; ;;
+		*) print_error "Option '-n/--notify' is not supported on platform / OS type '${PLATFORM}'"; result=1; ;;
 	esac
 fi
 case "${COMP_TYPE}" in
@@ -629,7 +629,7 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 	else
 		unzip -q -o -j -LL "${src}" '*.csv' -d "${dst}"
 	fi
-	[[ "${VERBOSE_OUTPUT}" == "true" ]] && print_normal "$(ls -l "${dst}"/*.csv | wc -l | awk '{ print $1 }') files"
+	[[ "${VERBOSE_OUTPUT}" == "true" ]] && print_normal "Extracted $(ls -l "${dst}"/*.csv | wc -l | awk '{ print $1 }') files"
 
 	# Parse country locations, generate dict country names -> ids (NOTE: using
 	# split_string here as it deals perfectly with quotes, separators in items
@@ -649,7 +649,7 @@ if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
 			country_ids["${continent_name,,}"]="${geoname_id}"
 		fi
 	done < <(tail -q -n +2 "${src}")
-	[[ "${VERBOSE_OUTPUT}" == "true" ]] && print_normal "${#country_ids[@]} countries"
+	[[ "${VERBOSE_OUTPUT}" == "true" ]] && print_normal "Found ${#country_ids[@]} countries"
 
 	# Parse country blocks, generate country blocklists (NOTE: most, probably
 	# only performance-critical part of script; awk call simplified for multi-

@@ -1,3 +1,11 @@
+## Changelog for v4.2 release
+
+Changes:
+- applied minor changes to console and log file output
+- added comment regarding GeoLite2 license to configuration
+- added screenshot with sample output (GitHub only)
+- updated and restructured `README.md`
+
 ## Changelog for v4.1 release
 
 Changes:
