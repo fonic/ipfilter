@@ -1,3 +1,13 @@
+## Changelog for v4.3 release
+
+Changes:
+- added `ipfilter.service` and `ipfilter.timer` for system service setup (Linux with systemd only)
+- added instructions for system service setup to `README.md`
+- overhauled `ipfilter.conf` (comments only, no changes to configuration items)
+- split `SCREENSHOT.png` into `SCREENSHOT1.png` and `SCREENSHOT2.png` (GitHub only)
+- renamed `Windows Runtime Environments.md` to `WINDOWS.md` (KISS)
+- applied other minor changes to `README.md` (URLs, wording, formatting)
+
 ## Changelog for v4.2 release
 
 Changes:
@@ -70,4 +80,4 @@ Initial release
 
 ##
 
-_Last updated: 07/22/23_
+_Last updated: 08/25/23_

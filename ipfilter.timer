@@ -1,0 +1,42 @@
+# /etc/systemd/system/ipfilter.timer
+
+# ------------------------------------------------------------------------------
+#                                                                              -
+#  IP Filter Updater & Generator (ipfilter)                                    -
+#                                                                              -
+#  Created by Fonic (https://github.com/fonic)                                 -
+#  Date: 04/15/19 - 08/25/23                                                   -
+#                                                                              -
+#  For detailed information regarding systemd units, see:                      -
+#  man systemd.exec, man systemd.unit, man systemd.service, man systemd.timer  -
+#                                                                              -
+#  Run the following command after applying changes to this file:              -
+#  $ systemctl daemon-reload                                                   -
+#                                                                              -
+# ------------------------------------------------------------------------------
+
+# NOTE:
+#
+# - Copy or move this file to folder '/etc/systemd/system' and run the following
+#   command to make systemd recognize the newly added timer (mandatory):
+#   $ systemctl daemon-reload
+#
+# - Items 'OnCalendar', 'RandomizedDelaySec' and 'Persistent' may be customized
+#   to fit the specific use case (optional)
+
+[Unit]
+Description=Timer for IP Filter Updater & Generator
+
+[Timer]
+# Run IP Filter on every day of every month of every year at 03:00am within a
+# 30min window (i.e. run at a randomly chosen time between 03:00am and 03:30am)
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=1800
+
+# Save last time timer was triggered and trigger immediately if a run has been
+# missed (e.g. due to system being offline during the time when the timer would
+# have normally been triggered)
+Persistent=true
+
+[Install]
+WantedBy=timers.target

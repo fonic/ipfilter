@@ -1,0 +1,63 @@
+# /etc/systemd/system/ipfilter.service
+
+# ------------------------------------------------------------------------------
+#                                                                              -
+#  IP Filter Updater & Generator (ipfilter)                                    -
+#                                                                              -
+#  Created by Fonic (https://github.com/fonic)                                 -
+#  Date: 04/15/19 - 08/25/23                                                   -
+#                                                                              -
+#  For detailed information regarding systemd units, see:                      -
+#  man systemd.exec, man systemd.unit, man systemd.service                     -
+#                                                                              -
+#  Run the following command after applying changes to this file:              -
+#  $ systemctl daemon-reload                                                   -
+#                                                                              -
+# ------------------------------------------------------------------------------
+
+# NOTE:
+#
+# - Replace all '%{...}' tokens with appropriate values, then copy or move this
+#   file to folder '/etc/systemd/system' and run the following command to make
+#   systemd recognize the newly added service (mandatory):
+#   $ systemctl daemon-reload
+#
+# - To have IP Filter send desktop notifications informing about success/failure
+#   of update runs, enable the 'ExecStart=...' line containing '--notify' and
+#   disable the other one (optional, recommended for use on desktop machines)
+#
+# - To restart applications that use the generated '.p2p' file after it has been
+#   successfully generated/updated by IP Filter, edit and enable one or more of
+#   the 'ExecStartPost=[+]...' lines (optional)
+
+[Unit]
+Description=IP Filter Updater & Generator
+Wants=network-online.target
+After=local-fs.target network-online.target nss-lookup.target
+
+[Service]
+Type=oneshot
+
+User=%{USER}
+Group=%{GROUP}
+
+WorkingDirectory=%{HOME}
+#ExecStart=%{HOME}/ipfilter.sh --notify
+ExecStart=%{HOME}/ipfilter.sh
+StandardOutput=file:%{HOME}/ipfilter.stdout.log
+StandardError=file:%{HOME}/ipfilter.stderr.log
+
+# Restart applications that use the generated '.p2p' after it has been success-
+# fully updated by IP Filter (add a '+' after 'ExecStartPost=' if the specified
+# command requires root privileges)
+#ExecStartPost=+/usr/bin/systemctl restart appname.service
+#ExecStartPost=+/path/to/root/app/executable --restart
+#ExecStartPost=/path/to/user/app/executable --restart
+
+# Allow up to 15min for an IP Filter run to complete (this prevents the job from
+# hanging indefinitely if something goes wrong; when the timeout is exceeded, IP
+# Filter receives SIGTERM and should shut down gracefully)
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target
