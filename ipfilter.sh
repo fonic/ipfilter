@@ -402,6 +402,81 @@ function cidr_to_range_ipv6() {
 	_sips="${_sips:: -1}"; _eips="${_eips:: -1}"
 }
 
+# Provide help if requested (NOTE: do this separately so that help shows up
+# whenever -h/--help is present, even if there are further valid / invalid
+# options present)
+function show_help () {
+	print_normal "Usage: ${SCRIPT_FILE} [OPTIONS]"
+	print_normal
+	print_normal "Options:"
+	print_normal "  -n, --notify       Send desktop notification to inform user"
+	print_normal "                     about success/failure (useful for cron)"
+	print_normal "  -k, --keep-temp    Do not remove temporary folder on exit"
+	print_normal "                     (useful for debugging)"
+	print_normal "  -c, --config       Specify a config file"
+	print_normal "  -h, --help         Display this help message"
+}
+
+function parse_opts () {
+	# Parse command line
+	local -A longoptspec=( [config]=1 )
+	local i=$(($# + 1))
+	local OPTARG OPTIND opt
+	while getopts ":nkc:h-:" opt; do
+		while true; do
+			case "${opt}" in
+				-) #OPTARG is name-of-long-option or name-of-long-option=value
+					# with this --key=value format only one argument is possible
+					if [[ ${OPTARG} =~ .*=.* ]]; then
+						opt=${OPTARG/=*/}
+						local arglen="${longoptspec[$opt]}"
+						((${#opt} <= 1)) && {
+							msg_err_help 2 "Syntax error: Invalid long option '$opt'"
+						}
+						if (($arglen != 1)); then
+							msg_err_help 2 "Syntax error: Option '$opt' does not support this syntax."
+						fi
+						OPTARG=${OPTARG#*=}
+					else #with this --key value1 value2 format multiple arguments are possible
+						opt="$OPTARG"
+						local arglen="${longoptspec[$opt]}"
+						((${#opt} <= 1)) && {
+							msg_err_help 2 "Syntax error: Invalid long option '$opt'"
+						}
+						OPTARG=("${@:OPTIND:arglen}")
+						((OPTIND+=arglen))
+						((OPTIND > i)) && {
+							msg_err_help 3 "Syntax error: Not all required arguments for option '$opt' are given."
+						}
+					fi
+
+					continue #now that opt/OPTARG are set we can process them as
+					# if getopts would've given us long options
+				;;
+				n|notify)  NOTIFY_USER="true"
+					;;
+				k|keep-temp)  KEEP_TEMP="true"
+					;;
+				c|config)  SCRIPT_CONFIG="${OPTARG:-$SCRIPT_CONFIG}"
+					;;
+				h|help)
+					show_help
+					exit 0
+					;;
+				h|help)
+					show_help
+					exit 0
+					;;
+				*)
+					print_error "Invalid command line. Use '--help' to display usage information."
+					show_help >&2
+					exit 2
+					;;
+			esac
+			break
+		done
+	done
+}
 
 # --------------------------------------
 #                                      -
@@ -426,36 +501,7 @@ set_window_title "${SCRIPT_TITLE}"
 print_normal
 print_hilite "--==[ ${SCRIPT_TITLE} ]==--"
 print_normal
-
-# Provide help if requested (NOTE: do this separately so that help shows up
-# whenever -h/--help is present, even if there are further valid / invalid
-# options present)
-if in_array "-h" "$@" || in_array "--help" "$@"; then
-	print_normal "Usage: ${SCRIPT_FILE} [OPTIONS]"
-	print_normal
-	print_normal "Options:"
-	print_normal "  -n, --notify       Send desktop notification to inform user"
-	print_normal "                     about success/failure (useful for cron)"
-	print_normal "  -k, --keep-temp    Do not remove temporary folder on exit"
-	print_normal "                     (useful for debugging)"
-	print_normal "  -h, --help         Display this help message"
-	exit 0
-fi
-
-# Parse command line
-result=0
-for arg in "$@"; do
-	case "${arg}" in
-		"-n"|"--notify") NOTIFY_USER="true"; ;;
-		"-k"|"--keep-temp") KEEP_TEMP="true"; ;;
-		*) print_error "Invalid option '${arg}'"; result=1; ;;
-	esac
-done
-if (( ${result} != 0 )); then
-	print_normal
-	print_error "Invalid command line. Use '--help' to display usage information."
-	exit 2
-fi
+parse_opts $@
 
 # Check and source configuration file
 if [[ ! -f "${SCRIPT_CONFIG}" ]]; then
