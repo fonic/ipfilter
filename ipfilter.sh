@@ -5,7 +5,7 @@
 #  IP Filter Updater & Generator (ipfilter)                                    -
 #                                                                              -
 #  Created by Fonic (https://github.com/fonic)                                 -
-#  Date: 04/15/19 - 08/25/23                                                   -
+#  Date: 04/15/19 - 04/26/24                                                   -
 #                                                                              -
 # ------------------------------------------------------------------------------
 
@@ -46,7 +46,8 @@ esac
 # which is a valid path on all OSes / runtime environments except Git for
 # Windows; same for INSTALL_DST below; macOS has no 'realpath' and there's
 # no simple workaround for that, so just don't support/use it)
-SCRIPT_TITLE="IP Filter Updater & Generator"
+SCRIPT_TITLE="IP Filter Updater & Generator (ipfilter)"
+SCRIPT_VERSION="4.4 (04/26/24)"
 if [[ "${PLATFORM}" == "macos" ]]; then
 	SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 else
@@ -91,12 +92,13 @@ IBL_FOUT="iblocklist-merged.p2p"
 declare -A IBL_LISTS=(["level1"]="ydxerpxkpcfqjaybcssw" ["level2"]="gyisgnzbhppbvsphucsw" ["level3"]="uwnukjqktoggdknzrhgh")
 
 # GeoLite2 settings (https://dev.maxmind.com/geoip/geoip2/geolite2)
-GL2_URL="https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-Country-CSV&license_key=%s&suffix=zip"
+GL2_URL="https://download.maxmind.com/geoip/databases/GeoLite2-Country-CSV/download?suffix=zip"
 GL2_FIN1="geolite2-country-database.zip"
 GL2_FIN2="geolite2-country-locations-en.csv"
 GL2_FIN3="geolite2-country-blocks-%s.csv"
 GL2_FOUT1="geolite2-%s.p2p"
 GL2_FOUT2="geolite2-merged.p2p"
+GL2_ID=""
 GL2_LICENSE=""
 GL2_COUNTRIES=()
 GL2_IPVERS=("IPv4")
@@ -159,13 +161,18 @@ function is_cmd_avail() {
 	return $?
 }
 
-# Download file [$1: URL, $2: destination path]
+# Download file [$1: URL, $2: destination path, $3: user (optional), $4: password
+# (optional)]
 function download_file() {
 	if is_cmd_avail "curl"; then
-		curl "${CURL_OPTS[@]}" "$1" --output "$2"
+		local curl_opts=("${CURL_OPTS[@]}")
+		[[ -n "${3+set}" && -n "${4+set}" ]] && curl_opts+=("--user" "$3:$4")
+		curl "${curl_opts[@]}" "$1" --output "$2"
 		return $?
 	elif is_cmd_avail "wget"; then
-		wget "${WGET_OPTS[@]}" "$1" --output-document="$2"
+		local wget_opts=("${WGET_OPTS[@]}")
+		[[ -n "${3+set}" && -n "${4+set}" ]] && wget_opts+=("--user=$3" "--password=$4")
+		wget "${wget_opts[@]}" "$1" --output-document="$2"
 		return $?
 	else
 		print_error "Unable to download '$1': no download command available"
@@ -424,7 +431,7 @@ trap "exit_trap" EXIT
 # Set window title, print title
 set_window_title "${SCRIPT_TITLE}"
 print_normal
-print_hilite "--==[ ${SCRIPT_TITLE} ]==--"
+print_hilite "--==[ ${SCRIPT_TITLE} v${SCRIPT_VERSION} ]==--"
 print_normal
 
 # Provide help if requested (NOTE: do this separately so that help shows up
@@ -607,16 +614,14 @@ fi
 # --------------------------------------
 
 > "${TEMP_DIR}/${GL2_FOUT2}"
-if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_LICENSE}" != "" ]]; then
+if (( ${#GL2_COUNTRIES[@]} > 0 )) && [[ "${GL2_ID}" != "" && "${GL2_LICENSE}" != "" ]]; then
 
-	# Download database (NOTE: using 'src2' to obfuscate GL2 license key in
-	# console/log output)
+	# Download database
 	print_hilite "Downloading GeoLite2 database..."
-	printf -v src "${GL2_URL}" "${GL2_LICENSE}"
-	printf -v src2 "${GL2_URL}" "xxxxxxxxxxxxxxxx"
+	printf -v src "${GL2_URL}"
 	dst="${TEMP_DIR}/${GL2_FIN1}"
-	vprint_transfer "${dst}" "${src2}"
-	download_file "${src}" "${dst}"
+	vprint_transfer "${dst}" "${src}"
+	download_file "${src}" "${dst}" "${GL2_ID}" "${GL2_LICENSE}"
 
 	# Extract database (NOTE: on Windows, unzip '*.csv' does not work while
 	# unzip '**.csv' does; no idea why exactly, but it works, so let it be)

@@ -29,7 +29,7 @@ Open `ipfilter.conf` in your favorite text editor and adjust the settings to you
 ## Subscriptions
 Using the [I-Blocklist](https://www.iblocklist.com/) feature does not require a subscription, as most of the provided lists are free to download. There are a few lists that are only available to subscribers, though. Non-free lists are currently unsupported - please open an [Issue](https://github.com/fonic/ipfilter/issues) if you have a subscription and want to help adding support for these lists.
 
-Using the [GeoLite2](https://dev.maxmind.com/geoip) feature requires a license key which can be obtained free of charge after [signing up](https://www.maxmind.com/en/geolite2/signup) (refer to [this blog post](https://blog.maxmind.com/2019/12/18/significant-changes-to-accessing-and-using-geolite2-databases/) for details).
+Using the [GeoLite2](https://dev.maxmind.com/geoip) feature requires an account ID and a license key which can be obtained free of charge after [signing up](https://www.maxmind.com/en/geolite2/signup) (refer to [this blog post](https://blog.maxmind.com/2019/12/18/significant-changes-to-accessing-and-using-geolite2-databases/) for details).
 
 ## Usage
 As settings are configured via `ipfilter.conf`, _ipfilter_ intentionally features only few command line options:
@@ -117,7 +117,7 @@ Configuration options and current defaults:
 #  IP Filter Updater & Generator (ipfilter)                                    -
 #                                                                              -
 #  Created by Fonic (https://github.com/fonic)                                 -
-#  Date: 04/15/19 - 08/25/23                                                   -
+#  Date: 04/15/19 - 04/26/24                                                   -
 #                                                                              -
 # ------------------------------------------------------------------------------
 
@@ -169,6 +169,14 @@ WGET_OPTS=("--no-verbose" "--tries=3" "--timeout=60")
 # Default: IBL_LISTS=(["level1"]="ydxerpxkpcfqjaybcssw" ["level2"]="gyisgnzbhppbvsphucsw" ["level3"]="uwnukjqktoggdknzrhgh")
 IBL_LISTS=(["level1"]="ydxerpxkpcfqjaybcssw" ["level2"]="gyisgnzbhppbvsphucsw" ["level3"]="uwnukjqktoggdknzrhgh")
 
+# Account ID to use to download GeoLite2 country blocks database (https://dev.maxmind.com/geoip)
+# NOTE:    A valid account ID is required to use the GeoLite2 feature; to obtain your account ID, sign
+#          in to your MaxMind account and navigate to: My Account -> Account -> Account Information
+# Format:  String
+# Example: GL2_ID="123456"
+# Default: GL2_ID=""
+GL2_ID=""
+
 # License key to use to download GeoLite2 country blocks database (https://dev.maxmind.com/geoip)
 # NOTE:    A valid license key is required to use the GeoLite2 feature, see URL below for details:
 #          https://blog.maxmind.com/2019/12/18/significant-changes-to-accessing-and-using-geolite2-databases/
@@ -210,4 +218,4 @@ COMP_TYPE="none"
 
 ##
 
-_Last updated: 08/25/23_
+_Last updated: 04/26/24_
