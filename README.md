@@ -1,5 +1,5 @@
 # IP Filter Updater &amp; Generator (ipfilter)
-Generates PeerGuardian (`.p2p`) blocklist from [I-Blocklist](https://www.iblocklist.com/) blocklists and [GeoLite2](https://dev.maxmind.com/geoip) country blocks. Suitable to run as a [system service](#set-up-as-system-service) on always-on devices (e.g. NAS, Raspberry Pi).
+Generates PeerGuardian (`.p2p`) blocklist from [I-BlockList](https://www.iblocklist.com/) blocklists and [GeoLite2](https://dev.maxmind.com/geoip) country blocks. Suitable to run as a [system service](#set-up-as-system-service) on always-on devices (e.g. NAS, Raspberry Pi).
 
 ## Donations
 I'm striving to become a full-time developer of [Free and open-source software (FOSS)](https://en.wikipedia.org/wiki/Free_and_open-source_software). Donations help me achieve that goal and are highly appreciated.
@@ -27,7 +27,7 @@ Refer to the [releases](https://github.com/fonic/ipfilter/releases) section for 
 Open `ipfilter.conf` in your favorite text editor and adjust the settings to your liking. Refer to embedded comments for details. Note that before changing any settings, it is recommended to run _ipfilter_ with *default settings* first to make sure it works as expected. Refer to [this section](#configuration-options--defaults) for a listing of all configuration options and current defaults.
 
 ## Subscriptions
-Using the [I-Blocklist](https://www.iblocklist.com/) feature does not require a subscription, as most of the provided lists are free to download. There are a few lists that are only available to subscribers, though. Non-free lists are currently unsupported - please open an [Issue](https://github.com/fonic/ipfilter/issues) if you have a subscription and want to help adding support for these lists.
+Using the [I-BlockList](https://www.iblocklist.com/) feature requires a username and a PIN which can be obtained free of charge after [signing up](https://www.iblocklist.com/register). Note that while most lists are free to download, there are also a few lists that are only available to subscribers. Those subscription-only lists are currently unsupported - please open an [Issue](https://github.com/fonic/ipfilter/issues) if you have a subscription and want to help with adding support.
 
 Using the [GeoLite2](https://dev.maxmind.com/geoip) feature requires an account ID and a license key which can be obtained free of charge after [signing up](https://www.maxmind.com/en/geolite2/signup) (refer to [this blog post](https://blog.maxmind.com/2019/12/18/significant-changes-to-accessing-and-using-geolite2-databases/) for details).
 
@@ -117,7 +117,7 @@ Configuration options and current defaults:
 #  IP Filter Updater & Generator (ipfilter)                                    -
 #                                                                              -
 #  Created by Fonic (https://github.com/fonic)                                 -
-#  Date: 04/15/19 - 04/26/24                                                   -
+#  Date: 04/15/19 - 08/18/24                                                   -
 #                                                                              -
 # ------------------------------------------------------------------------------
 
@@ -161,7 +161,24 @@ CURL_OPTS=("--fail" "--location" "--silent" "--show-error" "--retry" "2" "--conn
 # Default: WGET_OPTS=("--no-verbose" "--tries=3" "--timeout=60")
 WGET_OPTS=("--no-verbose" "--tries=3" "--timeout=60")
 
-# List of blocklists to download from I-Blocklist (https://www.iblocklist.com)
+# Username to use to download blocklists from I-BlockList (https://www.iblocklist.com)
+# NOTE:    A valid username is required to use the I-BlockList feature; this is the same username
+#          that you use to sign in to your I-BlockList account (https://www.iblocklist.com/login)
+# Format:  String
+# Example: IBL_USER="user"
+# Default: IBL_USER=""
+IBL_USER=""
+
+# PIN to use to download blocklists from I-BlockList (https://www.iblocklist.com)
+# NOTE:    A valid PIN is required to use the I-BlockList feature; to obtain your PIN, sign in to
+#          your I-BlockList account and click on the 'Member' button (or navigate manually to URL
+#          https://www.iblocklist.com/member)
+# Format:  String
+# Example: IBL_PIN="123456"
+# Default: IBL_PIN=""
+IBL_PIN=""
+
+# List of blocklists to download from I-BlockList (https://www.iblocklist.com)
 # NOTE:    To identify valid ids, inspect hyperlink targets or column 'Update URL' on this web page: https://www.iblocklist.com/lists
 #          e.g. 'level1' -> 'https://www.iblocklist.com/list?list=ydxerpxkpcfqjaybcssw' -> id is 'ydxerpxkpcfqjaybcssw' -> ["level1"]="ydxerpxkpcfqjaybcssw"
 # Format:  Array of name-id-pairs (i.e. string-string-pairs)
@@ -218,4 +235,4 @@ COMP_TYPE="none"
 
 ##
 
-_Last updated: 04/26/24_
+_Last updated: 08/18/24_

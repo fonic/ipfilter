@@ -5,7 +5,7 @@
 #  IP Filter Updater & Generator (ipfilter)                                    -
 #                                                                              -
 #  Created by Fonic (https://github.com/fonic)                                 -
-#  Date: 04/15/19 - 04/26/24                                                   -
+#  Date: 04/15/19 - 08/18/24                                                   -
 #                                                                              -
 # ------------------------------------------------------------------------------
 
@@ -47,7 +47,7 @@ esac
 # Windows; same for INSTALL_DST below; macOS has no 'realpath' and there's
 # no simple workaround for that, so just don't support/use it)
 SCRIPT_TITLE="IP Filter Updater & Generator (ipfilter)"
-SCRIPT_VERSION="4.4 (04/26/24)"
+SCRIPT_VERSION="4.5 (08/18/24)"
 if [[ "${PLATFORM}" == "macos" ]]; then
 	SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 else
@@ -85,10 +85,12 @@ CURL_OPTS=("--fail" "--location" "--silent" "--show-error" "--retry" "2" "--conn
 WGET_OPTS=("--no-verbose" "--tries=3" "--timeout=60")
 
 # I-BlockList settings (https://www.iblocklist.com/lists)
-IBL_URL="https://list.iblocklist.com/?list=%s&fileformat=p2p&archiveformat=gz"
+IBL_URL="https://list.iblocklist.com/?list=%s&fileformat=p2p&archiveformat=gz&username=%s&pin=%s"
 IBL_FIN1="iblocklist-%s.p2p.gz"
 IBL_FIN2="iblocklist-%s.p2p"
 IBL_FOUT="iblocklist-merged.p2p"
+IBL_USER=""
+IBL_PIN=""
 declare -A IBL_LISTS=(["level1"]="ydxerpxkpcfqjaybcssw" ["level2"]="gyisgnzbhppbvsphucsw" ["level3"]="uwnukjqktoggdknzrhgh")
 
 # GeoLite2 settings (https://dev.maxmind.com/geoip/geoip2/geolite2)
@@ -547,6 +549,7 @@ fi
 # use; cleanup is handled by exit_trap)
 print_hilite "Creating temporary folder..."
 TEMP_DIR="$(mktemp -d "/tmp/${SCRIPT_NAME}.XXXXXXXXXX")"
+[[ "${KEEP_TEMP}" == "true" ]] && print_normal "Temporary folder: ${TEMP_DIR}"
 
 # Set up logging (NOTE: log is written to temporary dir/file first and then
 # processed/finalized on exit by exit_trap; backups of stdout/stderr allow
@@ -565,15 +568,17 @@ fi
 # --------------------------------------
 
 > "${TEMP_DIR}/${IBL_FOUT}"
-if (( ${#IBL_LISTS[@]} > 0 )); then
+if (( ${#IBL_LISTS[@]} > 0 )) && [[ "${IBL_USER}" != "" && "${IBL_PIN}" != "" ]]; then
 
-	# Download blocklists
+	# Download blocklists (NOTE: using 'src2' to obfuscate username and PIN
+	# in console/log output)
 	print_hilite "Downloading I-BlockList blocklists..."
 	for list in "${!IBL_LISTS[@]}"; do
 		print_normal "Downloading blocklist '${list}'..."
-		printf -v src "${IBL_URL}" "${IBL_LISTS["${list}"]}"
+		printf -v src "${IBL_URL}" "${IBL_LISTS["${list}"]}" "${IBL_USER}" "${IBL_PIN}"
+		printf -v src2 "${IBL_URL}" "${IBL_LISTS["${list}"]}" "xxx" "xxx"
 		printf -v dst "${TEMP_DIR}/${IBL_FIN1}" "${list}"
-		vprint_transfer "${dst}" "${src}"
+		vprint_transfer "${dst}" "${src2}"
 		download_file "${src}" "${dst}"
 	done
 

@@ -1,3 +1,13 @@
+## Changelog for v4.5 release
+
+Changes:
+- Added support for downloading blocklists from I-BlockList as registered
+  user (by supplying username and PIN via configuration items `IBL_USER`
+  and `IBL_PIN`). Fixes https://github.com/fonic/ipfilter/issues/8
+- Obfuscate I-BlockList username and PIN in console/log output (to prevent
+  leaking sensitive information via logs and/or when posting script output
+  on GitHub)
+
 ## Changelog for v4.4 release
 
 Changes:
@@ -46,7 +56,7 @@ Changes:
 
 GitHub-only changes (not part of release):
 - Added test suite script
-- Added I-Blocklist scraper script
+- Added I-BlockList scraper script
 - Added hints document for Windows runtime environments
 - Updated `README.md`
 
@@ -89,4 +99,4 @@ Initial release.
 
 ##
 
-_Last updated: 04/26/24_
+_Last updated: 08/18/24_
